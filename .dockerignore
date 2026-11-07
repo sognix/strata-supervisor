@@ -3,7 +3,7 @@
 .github
 .claude
 local-mounts/
-tests/
+test/
 AI/
 docs/
 unraid/

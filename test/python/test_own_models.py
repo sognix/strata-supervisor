@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "app" / "backend"))
 
 from strata_webui.strata import gguf, own_models  # noqa: E402
 

@@ -18,7 +18,7 @@ Target system: Unraid, NVIDIA RTX 3090 (24 GB) + RTX 5060 Ti (16 GB), 48 GB RAM,
 - Both cards are used, the second card's VRAM is needed.
 - NVIDIA (`cuda13`) is the target. Since 2026-11-07 CI publishes every Strata flavor the UI can drive (section 14); AMD (`rocm-gfx110x`) is also the local test platform (7900 XTX). Flavor is a build ARG; the card query sits behind a small interface (`nvidia-smi` or `/sys/class/drm` + KFD); the rest of the code knows no vendor. AMD counts as tested on this one card only.
 - Local tests with a real model only after the user's explicit OK: they take GPU, RAM and disk, and the desktop app must have no model loaded. Pick models via `--plan` first. Download each model once and reuse it.
-- Local test mounts: `local-mounts/config` on `/config` (create it before the first start, else Docker creates it as root), `PUID=1000`/`PGID=1000` so the user can edit without `sudo`. `/data` is a local folder with room for the models. Files in `/data` belong to root; delete them via the container or `sudo`. Test runs remove only the container; data and config stay unless the user asks. Check free space before downloads. `local-mounts/` was called `test/` until 2026-11-04 (renamed: too easy to confuse with `tests/`).
+- Local test mounts: `local-mounts/config` on `/config` (create it before the first start, else Docker creates it as root), `PUID=1000`/`PGID=1000` so the user can edit without `sudo`. `/data` is a local folder with room for the models. Files in `/data` belong to root; delete them via the container or `sudo`. Test runs remove only the container; data and config stay unless the user asks. Check free space before downloads. `local-mounts/` was called `test/` until 2026-11-04; since 2026-11-07 `test/` holds the tests (`test/python/`, `test/unraid/`).
 - **RAM mode per model (decision 2026-11-03).** One choice per model, with a short UI text each, sorted from most to least RAM:
 
   | Mode | Flag | RAM need | UI text |
@@ -306,7 +306,7 @@ Main PC, real image `0.2.9-cuda13`, no GPU in the container; everything removed 
 - Engine help omits `--vram-reserve-mib`, `--vram-reserve-later-mib`, `--resident-budget-gib`, `--layer-split`; the binary contains them plus `--resident-experts` and `STRATA_RESIDENT_HEADROOM_GIB`.
 - Official entrypoint without NVIDIA card: exits after about 1 s with code 3, no download (`"usable": true` missing). **The supervisor must do this check itself:** per `TERMINAL_LAUNCH.md` `strata launch` downloads the model even without a usable engine and then exits 0 without starting anything.
 - `--status`/`--stop` without model: exit 0, container keeps running. `--plan` with `--access lan --port 8080 --data-dir /data/Strata-data` gives valid JSON and only creates empty folders. `ulimit -l` is `unlimited`, `/dev/shm` 2.0 GB.
-- Throwaway prototype (not in the repo) under `tini` with a `strata` stub (`tests/fake_strata.py` today): own `HEALTHCHECK`/`ENTRYPOINT` work (healthy after about 2 s without a model); no zombies with double-forked children; `docker stop` with stub reacting to SIGINT 2.6 s; stub ignoring SIGINT/SIGTERM escalates to SIGKILL in 6.8 s (3 s + 3 s waits); real `strata launch --stop` in the SIGTERM path about 0.1 s.
+- Throwaway prototype (not in the repo) under `tini` with a `strata` stub (`test/python/fake_strata.py` today): own `HEALTHCHECK`/`ENTRYPOINT` work (healthy after about 2 s without a model); no zombies with double-forked children; `docker stop` with stub reacting to SIGINT 2.6 s; stub ignoring SIGINT/SIGTERM escalates to SIGKILL in 6.8 s (3 s + 3 s waits); real `strata launch --stop` in the SIGTERM path about 0.1 s.
 
 ## 12. Server test (2026-11-03)
 
@@ -364,7 +364,8 @@ Built with two Claude sessions (implementer + reviewer). Moved from a private re
 | `.github/workflows/build.yml` | job `test` (unit tests), then job `build` as a matrix, one parallel job per flavor: image build, smoke test without GPU, push to ghcr.io. One package, tags with flavor suffix (`:dev-<flavor>` on main, `:X.Y.Z-<flavor>`/`:X.Y-<flavor>`/`:latest-<flavor>` on tags `vX.Y.Z`); `cuda13` also gets the tags without suffix. Docker v2 manifest for Unraid's update check |
 | `LICENSE`, `NOTICE.md` | MIT; Strata's MIT license and the components of the base image |
 | `README.md`, `docs/USER-GUIDE.md`, `CONTRIBUTING.md` | overview and configuration; usage; building and testing |
-| `tests/` | unit tests with fake `strata` (`tests/fake_strata.py`); `tests/dev_run.py` runs without Docker |
+| `test/python/` | unit tests with fake `strata` (`test/python/fake_strata.py`); `test/python/dev_run.py` runs without Docker (moved from `tests/` on 2026-11-07) |
+| `test/unraid/` | test of the Unraid template and its tag selection through a local CA feed (`UNRAID-TEST.md`) |
 
 ### Decisions during the build
 

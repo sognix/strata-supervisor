@@ -13,7 +13,7 @@ import time
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "app" / "backend"))
 
 from strata_webui.strata import model_config  # noqa: E402
 from strata_webui.web import api, server  # noqa: E402

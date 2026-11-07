@@ -1,6 +1,6 @@
 """Run the whole supervisor locally against the fake strata CLI, without Docker or a GPU.
 
-    python3 tests/dev_run.py /path/to/scratch/folder [UI_PORT] [PORT]
+    python3 test/python/dev_run.py /path/to/scratch/folder [UI_PORT] [PORT]
 
 Everything is written below the scratch folder. Stop it with Ctrl+C (SIGINT) or SIGTERM.
 """
@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "app" / "backend"))
 
 from strata_webui import supervisor  # noqa: E402
@@ -31,7 +31,7 @@ paths = Paths(
     config=scratch / "config",
     dev=scratch / "dev",
     llama_seed=scratch / "no-seed",
-    strata_bin=ROOT / "tests" / "fake_strata.py",
+    strata_bin=ROOT / "test" / "python" / "fake_strata.py",
     mountinfo=scratch / "no-mountinfo",
 )
 sys.exit(supervisor.main(paths, python_bin=Path(sys.executable)))

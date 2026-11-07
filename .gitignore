@@ -6,6 +6,9 @@ CLAUDE.md
 # Local test mounts: models, keys and settings never go into the repo.
 local-mounts/
 
+# Unraid feed test: the CA feed (about 20 MB, other people's templates) is downloaded, never committed.
+test/unraid/*.json
+
 __pycache__/
 *.pyc
 

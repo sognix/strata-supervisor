@@ -55,7 +55,7 @@ def print_gpus(backend: str | None) -> None:
 
 
 def main(paths: Paths | None = None, python_bin: Path = PYTHON_BIN) -> int:
-    """`paths` and `python_bin` are only changed by the local dev run (tests/dev_run.py)."""
+    """`paths` and `python_bin` are only changed by the local dev run (test/python/dev_run.py)."""
     env = dict(os.environ)
     paths = paths or Paths()
     report = run_checks(paths, env)

@@ -17,7 +17,7 @@
 - RAM mode per model: all experts in RAM, only what no card holds, a RAM budget, or straight from the model files.&#xD;
 - OpenAI- and Anthropic-compatible API on port 8080 while a model is loaded.&#xD;
 &#xD;
-Needs an NVIDIA GPU with the Nvidia-Driver plugin (driver 580.65 or newer) and "--gpus all" in Extra Parameters (set by default). Models are 60 to 190 GB each: put the Strata data path on a fast disk with room.&#xD;
+Pick the image for your card when you install: the default tag is for NVIDIA RTX 20 to 50 with driver 580 or newer; the other tags cover older NVIDIA cards and AMD RX 7000, RX 9000 and Strix Halo. NVIDIA needs the Nvidia-Driver plugin. Models are 60 to 190 GB each: put the Strata data path on a fast disk with room.&#xD;
 &#xD;
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
@@ -32,6 +32,30 @@ Unofficial private project, not affiliated with the Strata project.</Overview>
   <PostArgs/>
   <CPUset/>
   <Requires>An NVIDIA GPU, the Nvidia-Driver plugin (driver 580.65 or newer) and "--gpus all" in Extra Parameters. Lots of disk space for the models (60 to 190 GB each).</Requires>
+  <DefaultTagDescription>NVIDIA RTX 20, 30, 40 and 50 series (and RTX A / Quadro) with driver 580 or newer (Strata cuda13).</DefaultTagDescription>
+  <Branch>
+    <Tag>latest-cuda12</Tag>
+    <TagDescription>Older NVIDIA cards: GTX 10 (Pascal), Tesla P40 / P100, V100 (Volta), or any NVIDIA card with driver 575 to 579 (Strata cuda12).</TagDescription>
+    <Requires>An NVIDIA GPU, the Nvidia-Driver plugin (driver 575 or newer) and "--gpus all" in Extra Parameters. Lots of disk space for the models (60 to 190 GB each).</Requires>
+  </Branch>
+  <Branch>
+    <Tag>latest-rocm-gfx120x</Tag>
+    <TagDescription>AMD RX 9000 series and Radeon AI PRO R9700, RDNA 4 (Strata rocm-gfx120x).</TagDescription>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
+  </Branch>
+  <Branch>
+    <Tag>latest-rocm-gfx110x</Tag>
+    <TagDescription>AMD RX 7900, 7800, 7700 and 7600, RDNA 3 (Strata rocm-gfx110x).</TagDescription>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
+  </Branch>
+  <Branch>
+    <Tag>latest-rocm-gfx1151</Tag>
+    <TagDescription>AMD Ryzen AI Max, Strix Halo with Radeon 8060S (Strata rocm-gfx1151). Untested.</TagDescription>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
+  </Branch>
   <Config Name="Web UI port" Target="8081" Default="8081" Mode="tcp" Description="Web UI. Change only the host port here; set UI_PORT only with host networking." Type="Port" Display="always" Required="true" Mask="false">8081</Config>
   <Config Name="API port" Target="8080" Default="8080" Mode="tcp" Description="OpenAI- and Anthropic-compatible API of the loaded model. Without a model it answers 503." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
   <Config Name="Strata data" Target="/data" Default="/mnt/user/appdata/strata" Mode="rw" Description="Models (60 to 190 GB each), Strata state and the API key. Put it on a fast disk with enough space." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/strata</Config>
@@ -41,6 +65,6 @@ Unofficial private project, not affiliated with the Strata project.</Overview>
   <Config Name="Allowed host names" Target="ALLOWED_HOSTS" Default="" Mode="" Description="Recommended: the server's IP and name, comma separated, e.g. 192.168.1.10,tower. The web UI then answers only to these names, which stops other web pages from reaching it through DNS rebinding. Empty: any name." Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="Owner of the files the web UI writes in /config (99 = nobody)." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group of the files the web UI writes in /config (100 = users)." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
-  <Config Name="NVIDIA_VISIBLE_DEVICES" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Cards visible to the container." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
-  <Config Name="NVIDIA_DRIVER_CAPABILITIES" Target="NVIDIA_DRIVER_CAPABILITIES" Default="all" Mode="" Description="Driver features passed into the container." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA_VISIBLE_DEVICES" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="NVIDIA only: cards visible to the container. Ignored on AMD." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA_DRIVER_CAPABILITIES" Target="NVIDIA_DRIVER_CAPABILITIES" Default="all" Mode="" Description="NVIDIA only: driver features passed into the container. Ignored on AMD." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
 </Container>

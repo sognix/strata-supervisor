@@ -12,7 +12,8 @@ changes, please open an issue first so we can agree on the approach before you p
   - `strata_webui/web/` - JSON API (`api.py`) and HTTP server (`server.py`)
   - `strata_webui/core/` - command runner, caches, log buffer
 - `app/frontend/` - plain HTML/CSS/JavaScript, no build step, no frameworks.
-- `tests/` - unit tests with a fake `strata` CLI (`tests/fake_strata.py`).
+- `test/python/` - unit tests with a fake `strata` CLI (`test/python/fake_strata.py`).
+- `test/unraid/` - testing the Unraid template and its tag selection without Community Applications.
 - `Dockerfile` - the image; `.github/workflows/build.yml` tests, builds and publishes it.
 - `unraid/` - Unraid template and icon; `ca_profile.xml` is the Community Applications profile.
 - `AI/` - background, decisions, test results and the UI design. Section numbers there are referenced
@@ -21,8 +22,8 @@ changes, please open an issue first so we can agree on the approach before you p
 ## Tests and a run without Docker
 
 ```sh
-python3 -m unittest discover -s tests          # unit tests with the fake strata CLI
-python3 tests/dev_run.py /tmp/strata-dev       # whole supervisor without Docker: UI on :18081, API on :18080
+python3 -m unittest discover -s test/python          # unit tests with the fake strata CLI
+python3 test/python/dev_run.py /tmp/strata-dev       # whole supervisor without Docker: UI on :18081, API on :18080
 ```
 
 `dev_run.py` uses the fake CLI, so the UI works without a GPU and without downloads.

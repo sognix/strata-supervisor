@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app" / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "app" / "backend"))
 
 from strata_webui.host import startup  # noqa: E402
 from strata_webui.core.ownership import DIR_MODE, Owner, owner_from_env  # noqa: E402
