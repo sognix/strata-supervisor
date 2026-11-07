@@ -10,6 +10,7 @@ FROM ghcr.io/niko1221/strata:${STRATA_VERSION}-${STRATA_FLAVOR}
 ARG STRATA_VERSION
 ARG STRATA_FLAVOR
 ARG VERSION=dev
+ARG COMMIT=
 ARG BUILD_DATE=
 LABEL org.opencontainers.image.title="Strata Supervisor" \
       org.opencontainers.image.description="Web UI to manage Strata models and load them by hand, one at a time" \
@@ -28,6 +29,12 @@ COPY LICENSE NOTICE.md /opt/strata-supervisor/
 ENV PUID=99 \
     PGID=100 \
     UI_PORT=8081
+
+# Shown at the bottom of the sidebar (web/api.py, versions()). Not STRATA_*: Strata reads its own STRATA_* variables.
+ENV SUPERVISOR_VERSION=${VERSION} \
+    SUPERVISOR_COMMIT=${COMMIT} \
+    SUPERVISOR_STRATA_VERSION=${STRATA_VERSION} \
+    SUPERVISOR_STRATA_FLAVOR=${STRATA_FLAVOR}
 
 EXPOSE 8081
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 from dataclasses import dataclass, field
@@ -28,6 +29,20 @@ STATUS_CACHE_S = 2.0
 KEY_LINE = re.compile(r"^(\s*API key\s+)\S+")
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def versions(env: dict[str, str] | None = None) -> dict:
+    """Versions for the sidebar, set by the Dockerfile from the build arguments. A local run has none of them."""
+    env = os.environ if env is None else env
+    supervisor = env.get("SUPERVISOR_VERSION") or "dev"
+    commit = env.get("SUPERVISOR_COMMIT") or ""
+    if supervisor == "dev" and commit:
+        supervisor = f"dev ({commit})"
+    return {
+        "supervisor": supervisor,
+        "strata": env.get("SUPERVISOR_STRATA_VERSION") or "unknown",
+        "flavor": env.get("SUPERVISOR_STRATA_FLAVOR") or "",
+    }
 
 
 @dataclass
@@ -130,6 +145,7 @@ class AppState:
             "limits": memory.memory_limits(self.cgroup_dir, self.meminfo),
             "container_memory": memory.container_usage(self.cgroup_dir),
             "ports": {"api": r.port, "ui": r.ui_port},
+            "versions": versions(),
         }
 
     def models(self) -> dict:

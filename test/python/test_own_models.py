@@ -1,4 +1,4 @@
-"""Tests for reading GGUF headers and listing the folders under /models. Run: python3 -m unittest discover -s tests"""
+"""Tests for reading GGUF headers and listing the folders under /models. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 

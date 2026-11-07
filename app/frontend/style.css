@@ -37,6 +37,8 @@ aside { background: var(--side); border-right: 1px solid var(--line); display: f
 .nav-act:hover { color: var(--text); background: var(--line); }
 .nav[data-route] > .nav-act { margin-left: auto; }
 .subnav .nav-act svg { width: 14px; height: 14px; }
+.versions { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; padding: 6px 10px 0; font-size: 11px; color: var(--muted); }
+.versions .mono { font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .subnav { margin: 2px 0 6px 16px; padding-left: 10px; border-left: 1px solid var(--line); }
 .subnav .nav { font-size: 13px; padding: 4px 8px; }
 .subnav .nav span.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }

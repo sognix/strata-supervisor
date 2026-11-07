@@ -1,4 +1,4 @@
-"""Tests for the launch control against the fake strata CLI. Run: python3 -m unittest discover -s tests"""
+"""Tests for the launch control against the fake strata CLI. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 

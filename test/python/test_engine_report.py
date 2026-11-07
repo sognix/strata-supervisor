@@ -1,4 +1,4 @@
-"""Tests for reading the engine's memory figures from its log. Run: python3 -m unittest discover -s tests"""
+"""Tests for reading the engine's memory figures from its log. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 

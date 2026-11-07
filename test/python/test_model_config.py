@@ -1,4 +1,4 @@
-"""Tests for the per-model TOML files and their flags. Run: python3 -m unittest discover -s tests"""
+"""Tests for the per-model TOML files and their flags. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 

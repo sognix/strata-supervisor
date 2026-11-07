@@ -89,6 +89,12 @@ jobs:
           fi
           echo "Building on ghcr.io/niko1221/strata:$VERSION-$FLAVOR"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # The web UI shows its own version: "0.1.0" from a tag v0.1.0, else "dev" plus the commit.
+          case "$GITHUB_REF" in
+            refs/tags/v*) echo "app_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT" ;;
+            *) echo "app_version=dev" >> "$GITHUB_OUTPUT" ;;
+          esac
+          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       # Every tag carries the flavor as suffix; the default flavor also gets the plain tags.
       # latest=false: the action would otherwise add a plain :latest to every flavor's release.
@@ -128,7 +134,8 @@ jobs:
           build-args: |
             STRATA_VERSION=${{ steps.strata.outputs.version }}
             STRATA_FLAVOR=${{ matrix.flavor }}
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.strata.outputs.app_version }}
+            COMMIT=${{ steps.strata.outputs.commit }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           cache-from: type=gha,scope=${{ matrix.flavor }}
           cache-to: type=gha,mode=max,scope=${{ matrix.flavor }}
@@ -198,7 +205,8 @@ jobs:
           build-args: |
             STRATA_VERSION=${{ steps.strata.outputs.version }}
             STRATA_FLAVOR=${{ matrix.flavor }}
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.strata.outputs.app_version }}
+            COMMIT=${{ steps.strata.outputs.commit }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           cache-from: type=gha,scope=${{ matrix.flavor }}
           provenance: false

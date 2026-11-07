@@ -1,4 +1,4 @@
-"""Tests for the web API against the fake strata CLI. Run: python3 -m unittest discover -s tests"""
+"""Tests for the web API against the fake strata CLI. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 
@@ -45,6 +45,20 @@ class CachedTest(unittest.TestCase):
         ok._at -= commands.ERROR_TTL_S + 1
         ok.get()
         self.assertEqual(len(calls), 3)
+
+
+class VersionsTest(unittest.TestCase):
+    def test_release_build(self) -> None:
+        v = api.versions({"SUPERVISOR_VERSION": "0.1.0", "SUPERVISOR_COMMIT": "f01ec60",
+                          "SUPERVISOR_STRATA_VERSION": "0.2.12", "SUPERVISOR_STRATA_FLAVOR": "cuda13"})
+        self.assertEqual(v, {"supervisor": "0.1.0", "strata": "0.2.12", "flavor": "cuda13"})
+
+    def test_dev_build_shows_commit(self) -> None:
+        v = api.versions({"SUPERVISOR_VERSION": "dev", "SUPERVISOR_COMMIT": "f01ec60", "SUPERVISOR_STRATA_VERSION": "0.2.12"})
+        self.assertEqual(v["supervisor"], "dev (f01ec60)")
+
+    def test_local_run_without_build_values(self) -> None:
+        self.assertEqual(api.versions({}), {"supervisor": "dev", "strata": "unknown", "flavor": ""})
 
 
 class MemoryLimitsTest(unittest.TestCase):

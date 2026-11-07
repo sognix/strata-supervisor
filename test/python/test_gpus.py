@@ -1,4 +1,4 @@
-"""Tests for the card query. Run from the repo root: python3 -m unittest discover -s tests"""
+"""Tests for the card query. Run from the repo root: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 

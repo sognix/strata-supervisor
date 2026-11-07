@@ -1365,10 +1365,21 @@ async function refreshModels() {
   try { models = await api("/api/models"); } catch (e) { console.error(e); }
 }
 
+// Bottom of the sidebar: the Strata base and this web UI (web/api.py, versions()). Fixed per image, so set once.
+function renderVersions(v) {
+  const box = $("versions");
+  if (!v || box.childElementCount) return;
+  box.replaceChildren(
+    el("span", {}, "Strata version"), el("span", { class: "mono" }, v.strata),
+    el("span", {}, "Supervisor version"), el("span", { class: "mono" }, v.supervisor));
+  if (v.flavor) box.title = `Strata image flavor: ${v.flavor}`;
+}
+
 async function tick() {
   try {
     const before = status ? JSON.stringify(status.model) : "";
     status = await api("/api/status");
+    renderVersions(status.versions);
     const m = status.model;
     if (!m.active) idleVramUsed = Object.fromEntries(status.gpus.map((g) => [g.index, g.vram_used_mib || 0]));
     trackDownload();

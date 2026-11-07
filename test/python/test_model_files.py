@@ -1,4 +1,4 @@
-"""Tests for the Models page: listing and deleting model files. Run: python3 -m unittest discover -s tests"""
+"""Tests for the Models page: listing and deleting model files. Run: python3 -m unittest discover -s test/python"""
 
 from __future__ import annotations
 
