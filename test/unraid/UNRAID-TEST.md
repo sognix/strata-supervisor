@@ -15,19 +15,6 @@ How it works (CA source, `Squidly271/community.applications`, `include/`):
 
 Everything here lives in RAM on Unraid (`/usr/local/emhttp`, `/tmp`): a reboot undoes it.
 
-## Before you start
-
-- CI has run on `main`, so the `:dev` tags exist (`:dev`, `:dev-cuda12`, `:dev-rocm-gfx120x`,
-  `:dev-rocm-gfx110x`, `:dev-rocm-gfx1151`).
-- While the package on ghcr.io is private, Unraid can pull it only after a login. On the server's command
-  line, with a GitHub token that has `read:packages`:
-
-  ```sh
-  docker login ghcr.io -u sognix
-  ```
-
-  Not needed once the package is public.
-
 ## 1. Build the feed (on your PC, in the project folder)
 
 ```sh

@@ -15,6 +15,8 @@ changes, please open an issue first so we can agree on the approach before you p
 - `test/python/` - unit tests with a fake `strata` CLI (`test/python/fake_strata.py`).
 - `test/unraid/` - testing the Unraid template and its tag selection without Community Applications.
 - `Dockerfile` - the image; `.github/workflows/build.yml` tests, builds and publishes it.
+- `renovate.json` - Renovate opens a pull request when Strata publishes a new version
+  (`STRATA_VERSION` in the `Dockerfile`). Dependabot keeps the GitHub Actions up to date.
 - `unraid/` - Unraid template and icon; `ca_profile.xml` is the Community Applications profile.
 - `AI/` - background, decisions, test results and the UI design. Section numbers there are referenced
   from code comments; keep them stable.

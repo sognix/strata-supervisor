@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Only the Strata base image. GitHub Actions are Dependabot's job (.github/dependabot.yml).",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["custom.regex"],
+  "dependencyDashboard": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Strata version in the Dockerfile; every flavor is built from it, so it is checked against the default flavor's tags (e.g. 0.2.12-cuda13). A release without images (like 0.2.10) is never proposed.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["ARG STRATA_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "ghcr.io/niko1221/strata",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "semver",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)-cuda13$"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["ghcr.io/niko1221/strata"],
+      "commitMessageTopic": "Strata base image",
+      "labels": ["strata-update"],
+      "prBodyNotes": [
+        "The web UI depends on some Strata internals. Before merging, go through `AI/IMPLEMENTATION.md`, section 15 (what to check after a Strata update), and test on a real card. CI builds every flavor but has no GPU."
+      ]
+    }
+  ]
+}
