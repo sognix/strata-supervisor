@@ -1,14 +1,14 @@
 # Third-party notices
 
 Strata Supervisor is a web UI that drives [Strata](https://github.com/Niko1221/Strata). Its image is built
-`FROM` the official Strata image (`ghcr.io/niko1221/strata`, tag set by the `STRATA_TAG` build argument in the
-`Dockerfile`, the label `strata.base` of every image names it). This repository contains only the web UI's own
+`FROM` the official Strata image (`ghcr.io/niko1221/strata`, tag `<STRATA_VERSION>-<STRATA_FLAVOR>` from the build
+arguments in the `Dockerfile`, the label `strata.base` of every image names it). This repository contains only the web UI's own
 source code; Strata and everything in its image are not copied into this repository and are not modified.
 
 ## Strata
 
 - **License:** MIT License
-- **Source:** https://github.com/Niko1221/Strata (the release tag matching `STRATA_TAG`)
+- **Source:** https://github.com/Niko1221/Strata (the release tag matching `STRATA_VERSION`)
 - **Copyright:** (c) 2026 Niko1221 and the Strata contributors
 
 ```text

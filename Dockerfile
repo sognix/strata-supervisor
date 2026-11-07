@@ -1,10 +1,14 @@
 # Strata Supervisor: a web UI on top of the official Strata image. No Strata code is changed.
-#   NVIDIA:            docker build -t strata-supervisor .
-#   AMD RX 7000 (HIP): docker build --build-arg STRATA_TAG=0.2.9-rocm-gfx110x -t strata-supervisor:rocm .
-ARG STRATA_TAG=0.2.9-cuda13
-FROM ghcr.io/niko1221/strata:${STRATA_TAG}
+# The base image is ghcr.io/niko1221/strata:<STRATA_VERSION>-<STRATA_FLAVOR>. The Strata version is set
+# only here; CI builds every flavor from it (.github/workflows/build.yml, matrix "flavor").
+#   NVIDIA RTX (default): docker build -t strata-supervisor .
+#   AMD RX 7000:          docker build --build-arg STRATA_FLAVOR=rocm-gfx110x -t strata-supervisor:rocm .
+ARG STRATA_VERSION=0.2.9
+ARG STRATA_FLAVOR=cuda13
+FROM ghcr.io/niko1221/strata:${STRATA_VERSION}-${STRATA_FLAVOR}
 
-ARG STRATA_TAG
+ARG STRATA_VERSION
+ARG STRATA_FLAVOR
 ARG VERSION=dev
 ARG BUILD_DATE=
 LABEL org.opencontainers.image.title="Strata Supervisor" \
@@ -13,7 +17,8 @@ LABEL org.opencontainers.image.title="Strata Supervisor" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      strata.base="ghcr.io/niko1221/strata:${STRATA_TAG}"
+      strata.base="ghcr.io/niko1221/strata:${STRATA_VERSION}-${STRATA_FLAVOR}" \
+      strata.flavor="${STRATA_FLAVOR}"
 
 # backend/ (Python) and frontend/ (the page) side by side, as in the repo. The license texts travel with the image.
 COPY app/ /opt/strata-supervisor/

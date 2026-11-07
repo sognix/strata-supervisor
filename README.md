@@ -114,10 +114,12 @@ To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 
 ## Known limitations
 
-- Only the NVIDIA image is published. Strata's AMD images (e.g. `0.2.9-rocm-gfx110x`) work as a
-  base too (`--build-arg STRATA_TAG=...`), but are only tested on one RX 7900 XTX.
+- One image per Strata flavor is published: `cuda13`, `cuda12`, `rocm-gfx120x`, `rocm-gfx110x` and
+  `rocm-gfx1151`. Tested on real cards: only `cuda13` (RTX 3090 + RTX 5060 Ti) and `rocm-gfx110x`
+  (one RX 7900 XTX). Intel Arc (`sycl`) is not built.
 - The UI depends on some internals of Strata (catalog, log lines, folder layout). A new Strata
-  version may need an update of this project; the base tag is pinned in the `Dockerfile`.
+  version may need an update of this project; the Strata version is pinned in the `Dockerfile`
+  (`STRATA_VERSION`).
 - Only one model is loaded at a time. Strata's "one model per card" mode is not supported.
 - Tuning (`--tune`) is not offered.
 

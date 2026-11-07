@@ -30,8 +30,8 @@ python3 tests/dev_run.py /tmp/strata-dev       # whole supervisor without Docker
 ## Building and running the image
 
 ```sh
-docker build -t strata-supervisor:dev .                                                # NVIDIA (cuda13)
-docker build --build-arg STRATA_TAG=0.2.9-rocm-gfx110x -t strata-supervisor:rocm .     # AMD RX 7000
+docker build -t strata-supervisor:dev .                                          # NVIDIA RTX (cuda13)
+docker build --build-arg STRATA_FLAVOR=rocm-gfx110x -t strata-supervisor:rocm .  # AMD RX 7000
 ```
 
 NVIDIA:

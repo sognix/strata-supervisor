@@ -7,7 +7,8 @@ each release also names the Strata base image it was built on.
 
 ## [v0.1.0] - first public release
 
-Built on `ghcr.io/niko1221/strata:0.2.9-cuda13`.
+Built on Strata `0.2.9`, one image per flavor: `cuda13` (also the tags without suffix), `cuda12`,
+`rocm-gfx120x`, `rocm-gfx110x`, `rocm-gfx1151`.
 
 - Several model configs, one TOML file each in `/config/models`; load and unload one at a time,
   only by hand. Nothing loads at container start.

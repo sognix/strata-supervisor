@@ -1,19 +1,27 @@
 # Copyright (c) 2026 sognix
 # SPDX-License-Identifier: MIT
 #
-# Runs the unit tests, builds the image on GitHub-hosted runners and publishes it to
-# GitHub Container Registry (ghcr.io/<owner>/strata-supervisor).
+# Runs the unit tests, then builds one image per Strata flavor on GitHub-hosted runners and
+# publishes them to GitHub Container Registry (ghcr.io/<owner>/strata-supervisor), all in one
+# package, told apart by the tag suffix:
 #
-#   pull request     -> tests + build + smoke test only (nothing is pushed)
-#   push to main     -> tests + build + smoke test + push :dev   (development builds)
-#   tag v1.2.3       -> tests + build + smoke test + push :1.2.3, :1.2 and :latest (releases)
-#   manual run       -> like a push to the branch/tag it runs on; optionally another Strata base tag
+#   pull request     -> tests + build + smoke test of every flavor (nothing is pushed)
+#   merge into main  -> same + push :dev-<flavor>   (development builds)
+#   tag v1.2.3       -> same + push :1.2.3-<flavor>, :1.2-<flavor> and :latest-<flavor> (releases)
+#   manual run       -> like a push to the branch/tag it runs on; optionally another Strata version
 #
-# :latest only ever changes through a version tag, never through a normal push.
+# The default flavor (cuda13) also gets the tags without suffix (:dev, :1.2.3, :1.2, :latest).
+# :latest and :latest-<flavor> only ever change through a version tag.
 #
-# The image is the NVIDIA flavor (Strata's cuda13 image). Every image carries the Strata base
-# image it was built on as the label "strata.base". Runners have no GPU: the smoke test checks
-# that the web UI starts, reports the missing card and keeps the API port placeholder up.
+# Flavors are Strata's image flavors (docs/DOCKER.md): cuda13 NVIDIA RTX 20-50 with driver 580+,
+# cuda12 older NVIDIA (GTX 10, P100, V100) or driver 575-579, rocm-gfx120x AMD RX 9000 / R9700,
+# rocm-gfx110x AMD RX 7000, rocm-gfx1151 AMD Strix Halo. Not built: sycl (Intel Arc), because the
+# web UI has no card query for it and Strata does not download models for Arc in the container.
+#
+# The flavors are independent: each one is its own job and they run in parallel. One failing
+# flavor does not cancel the others. Every image carries its Strata base image as the label
+# "strata.base". Runners have no GPU: the smoke test checks that the web UI starts, reports the
+# missing card and keeps the API port placeholder up.
 
 name: Build image
 
@@ -24,8 +32,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      strata_tag:
-        description: "Strata base image tag (e.g. 0.2.9-cuda13). Empty = the default in the Dockerfile."
+      strata_version:
+        description: "Strata version for all flavors (e.g. 0.2.12). Empty = the default in the Dockerfile."
         type: string
         default: ""
 
@@ -41,7 +49,7 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/strata-supervisor
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -50,34 +58,57 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
 
-      - name: Resolve Strata base tag
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    name: build (${{ matrix.flavor }})
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [cuda13, cuda12, rocm-gfx120x, rocm-gfx110x, rocm-gfx1151]
+    env:
+      DEFAULT_FLAVOR: cuda13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve Strata base image
         id: strata
         env:
-          PINNED: ${{ inputs.strata_tag }}
+          PINNED: ${{ inputs.strata_version }}
+          FLAVOR: ${{ matrix.flavor }}
         run: |
           if [ -n "$PINNED" ]; then
-            TAG="$PINNED"
+            VERSION="$PINNED"
           else
-            TAG=$(sed -n 's/^ARG STRATA_TAG=//p' Dockerfile)
+            VERSION=$(sed -n 's/^ARG STRATA_VERSION=//p' Dockerfile)
           fi
-          if [ -z "$TAG" ]; then
-            echo "::error::Could not determine the Strata base tag"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not determine the Strata version"
             exit 1
           fi
-          echo "Building on ghcr.io/niko1221/strata:$TAG"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building on ghcr.io/niko1221/strata:$VERSION-$FLAVOR"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # Every tag carries the flavor as suffix; the default flavor also gets the plain tags.
+      # latest=false: the action would otherwise add a plain :latest to every flavor's release.
       - name: Image tags and labels
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          flavor: |
+            latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=dev,enable={{is_default_branch}}
-            type=ref,event=pr
+            type=semver,pattern={{version}},suffix=-${{ matrix.flavor }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.flavor }}
+            type=raw,value=latest-${{ matrix.flavor }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=dev-${{ matrix.flavor }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=pr,suffix=-${{ matrix.flavor }}
+            type=semver,pattern={{version}},enable=${{ matrix.flavor == env.DEFAULT_FLAVOR }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.flavor == env.DEFAULT_FLAVOR }}
+            type=raw,value=latest,enable=${{ matrix.flavor == env.DEFAULT_FLAVOR && startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=dev,enable=${{ matrix.flavor == env.DEFAULT_FLAVOR && github.ref == 'refs/heads/main' }}
           labels: |
             org.opencontainers.image.title=Strata Supervisor
             org.opencontainers.image.description=Web UI to manage Strata models and load them by hand, one at a time
@@ -95,11 +126,12 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            STRATA_TAG=${{ steps.strata.outputs.tag }}
+            STRATA_VERSION=${{ steps.strata.outputs.version }}
+            STRATA_FLAVOR=${{ matrix.flavor }}
             VERSION=${{ steps.meta.outputs.version }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.flavor }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.flavor }}
 
       - name: Smoke test
         env:
@@ -164,10 +196,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            STRATA_TAG=${{ steps.strata.outputs.tag }}
+            STRATA_VERSION=${{ steps.strata.outputs.version }}
+            STRATA_FLAVOR=${{ matrix.flavor }}
             VERSION=${{ steps.meta.outputs.version }}
             BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          cache-from: type=gha
+          cache-from: type=gha,scope=${{ matrix.flavor }}
           provenance: false
           sbom: false
           outputs: type=registry,oci-mediatypes=false
