@@ -58,6 +58,20 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s test/python -v
 
+      # A release tag needs its notes: a section "## [vX.Y.Z]" in CHANGELOG.md and "### vX.Y.Z" in
+      # <Changes> of the Unraid template. Without them no image is built or pushed for the tag.
+      # release.py (local, not in the repo) writes both before the tag is made.
+      - name: Release notes present
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          V="$GITHUB_REF_NAME"
+          ok=1
+          grep -qF "## [$V]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md has no section '## [$V]'"; ok=0; }
+          grep -qF "### $V&#xD;" unraid/strata-supervisor.xml \
+            || { echo "::error::unraid/strata-supervisor.xml has no '### $V' in <Changes>"; ok=0; }
+          [ "$ok" = "1" ]
+
   build:
     needs: test
     runs-on: ubuntu-latest
@@ -89,7 +103,7 @@ jobs:
           fi
           echo "Building on ghcr.io/niko1221/strata:$VERSION-$FLAVOR"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # The web UI shows its own version: "0.1.0" from a tag v0.1.0, else "dev" plus the commit.
+          # The web UI shows its own version: "1.0.0" from a tag v1.0.0, else "dev" plus the commit.
           case "$GITHUB_REF" in
             refs/tags/v*) echo "app_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT" ;;
             *) echo "app_version=dev" >> "$GITHUB_OUTPUT" ;;

@@ -52,7 +52,7 @@ The `grep` must show `= true;`. Removing `tempFiles` makes CA read the feed agai
 3. Pick `dev-cuda12`: the form must show the repository `ghcr.io/sognix/strata-supervisor:dev-cuda12`
    and Extra Parameters `--gpus all --ulimit memlock=-1:-1 --shm-size 2g`. Cancel.
 4. Pick `dev-rocm-gfx110x`: repository `…:dev-rocm-gfx110x`, Extra Parameters
-   `--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g`. Cancel (no AMD card in
+   `--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g`. Cancel (no AMD card in
    the server).
 5. Pick **Default** and install for real: this is the `cuda13` image for the server test.
 
@@ -72,6 +72,5 @@ updates. A CA plugin update also resets the switch.
 
 ## Not covered
 
-- The AMD branches can be checked in the form only; this server has no AMD card. Whether AMD needs
-  `--group-add` for the video and render groups when the container runs as root is unchecked.
+- The AMD branches can be checked in the form only; this server has no AMD card.
 - CA's own validation of a submitted template (that happens on `ca.unraid.net/submit`).

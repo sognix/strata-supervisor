@@ -22,7 +22,7 @@ Pick the image for your card when you install: the default tag is for NVIDIA RTX
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
 Unofficial private project, not affiliated with the Strata project.</Overview>
-  <Changes>### 0.1.0&#xD;
+  <Changes>### v1.0.0&#xD;
 - First release.</Changes>
   <Category>AI: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8081]/</WebUI>
@@ -41,19 +41,19 @@ Unofficial private project, not affiliated with the Strata project.</Overview>
   <Branch>
     <Tag>latest-rocm-gfx120x</Tag>
     <TagDescription>AMD RX 9000 series and Radeon AI PRO R9700, RDNA 4 (Strata rocm-gfx120x).</TagDescription>
-    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
     <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
   </Branch>
   <Branch>
     <Tag>latest-rocm-gfx110x</Tag>
     <TagDescription>AMD RX 7900, 7800, 7700 and 7600, RDNA 3 (Strata rocm-gfx110x).</TagDescription>
-    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
     <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
   </Branch>
   <Branch>
     <Tag>latest-rocm-gfx1151</Tag>
     <TagDescription>AMD Ryzen AI Max, Strix Halo with Radeon 8060S (Strata rocm-gfx1151). Untested.</TagDescription>
-    <ExtraParams>--device /dev/kfd --device /dev/dri --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+    <ExtraParams>--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
     <Requires>An AMD card with the amdgpu driver (built into Unraid). Lots of disk space for the models (60 to 190 GB each).</Requires>
   </Branch>
   <Config Name="Web UI port" Target="8081" Default="8081" Mode="tcp" Description="Web UI. Change only the host port here; set UI_PORT only with host networking." Type="Port" Display="always" Required="true" Mask="false">8081</Config>

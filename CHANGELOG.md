@@ -3,11 +3,9 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
-## [Unreleased]
+## [v1.0.0] - 2026-11-07
 
-## [v0.1.0] - first public release
-
-Built on Strata `0.2.9`, one image per flavor: `cuda13` (also the tags without suffix), `cuda12`,
+First public release. Built on Strata `0.2.12`, one image per flavor: `cuda13` (also the tags without suffix), `cuda12`,
 `rocm-gfx120x`, `rocm-gfx110x`, `rocm-gfx1151`.
 
 - Several model configs, one TOML file each in `/config/models`; load and unload one at a time,
@@ -20,5 +18,6 @@ Built on Strata `0.2.9`, one image per flavor: `cuda13` (also the tags without s
   them; delete with confirmation.
 - Logs of the launch, the engine and the supervisor, with the API key hidden.
 - Hardware page: start checks, cards with VRAM, RAM and swap of the container.
+- Strata and Supervisor version at the bottom of the sidebar.
 - API port placeholder: `503 No model loaded in Strata.` while no model runs.
 - Unraid template and Community Applications profile.

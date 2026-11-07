@@ -14,9 +14,34 @@ options and building are in the [README](../README.md).
 
 ## 2. Install on Unraid
 
-1. Install the **Nvidia-Driver** plugin (driver 580.65 or newer) and reboot if it asks you to.
-2. Install **strata-supervisor** from Community Applications (or add the template
-   `unraid/strata-supervisor.xml` by hand).
+### Pick your image
+
+There is one image per graphics card family, built on the matching Strata image. When you install from
+Community Applications, Unraid asks which one you want; **Default** is the first row.
+
+| Your card | Pick | Tag | Needs |
+| --- | --- | --- | --- |
+| NVIDIA RTX 20, 30, 40, 50 (also RTX A / Quadro), driver 580 or newer | Default | `latest` | Nvidia-Driver plugin |
+| Older NVIDIA: GTX 10 (Pascal), Tesla P40 / P100, V100, or any NVIDIA card with driver 575 to 579 | `latest-cuda12` | `latest-cuda12` | Nvidia-Driver plugin |
+| AMD RX 9000, Radeon AI PRO R9700 (RDNA 4) | `latest-rocm-gfx120x` | `latest-rocm-gfx120x` | nothing extra |
+| AMD RX 7900, 7800, 7700, 7600 (RDNA 3) | `latest-rocm-gfx110x` | `latest-rocm-gfx110x` | nothing extra |
+| AMD Ryzen AI Max, Strix Halo (Radeon 8060S) | `latest-rocm-gfx1151` | `latest-rocm-gfx1151` | nothing extra |
+
+Not sure which NVIDIA image? Run `nvidia-smi` on the Unraid console: driver 580 or newer and an RTX card means
+Default, anything else `latest-cuda12`. Intel Arc is not supported.
+
+Tested on real cards: Default (RTX 3090 + RTX 5060 Ti) and `latest-rocm-gfx110x` (RX 7900 XTX). The others
+are built the same way but nobody has run them on a card yet; please report how they work.
+
+The choice also sets **Extra Parameters** (see step 5). To change the image later, edit the container and
+change the tag at the end of **Repository**, and set Extra Parameters to match.
+
+### Install
+
+1. NVIDIA only: install the **Nvidia-Driver** plugin and reboot if it asks you to. AMD cards need nothing
+   extra; the driver is part of Unraid.
+2. Install **strata-supervisor** from Community Applications and pick your image (or add the template
+   `unraid/strata-supervisor.xml` by hand; then set the tag in **Repository** yourself).
 3. Check the paths before you press Apply:
    - **Strata data** (`/data`): the models live here, 60 to 190 GB each, plus prepared data. Put it on a fast
      disk (an SSD pool) with plenty of room.
@@ -26,7 +51,9 @@ options and building are in the [README](../README.md).
    Without this setting a malicious web page you open could reach the UI through a trick called DNS rebinding,
    read the API key and load or unload models. With it, the UI answers only to these names; open it with one of
    them.
-5. Leave **Extra Parameters** at `--gpus all --ulimit memlock=-1:-1 --shm-size 2g`.
+5. Leave **Extra Parameters** as the image choice set them:
+   - NVIDIA: `--gpus all --ulimit memlock=-1:-1 --shm-size 2g`
+   - AMD: `--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g`
 6. If another container already uses port 8080 (for example another LLM server), change the host port of
    **API port**, or stop the other container.
 
@@ -37,9 +64,10 @@ Other Docker hosts: see the `docker run` example in the README.
 1. Open `http://<server>:8081`.
 2. Look at **Hardware**:
    - **Start checks** should say "all passed". A red message blocks loading until it is fixed and the container
-     is restarted. Usual causes: `--gpus all` is missing, the Nvidia-Driver plugin is missing, or the driver is
-     too old.
-   - **Graphics cards** lists your cards with the numbers Strata uses (the `nvidia-smi` numbers).
+     is restarted. Usual causes: the wrong image for the card, `--gpus all` (NVIDIA) or the `--device` and
+     `--group-add video` flags (AMD) missing in Extra Parameters, the Nvidia-Driver plugin missing, or the driver too old.
+   - **Graphics cards** lists your cards with the numbers Strata uses (NVIDIA: the `nvidia-smi` numbers).
+   - **Engine backend** shows `cuda` (NVIDIA) or `hip` (AMD).
 3. Note the **API key**: the "API key" button in the top bar shows it. Without `API_KEY` in the container
    settings, one is made on the first start and kept in `/data/state/api-key`. It stays the same for every
    model and every restart.
@@ -191,6 +219,8 @@ Timeout"). The UI stops the model within 8 seconds; in tests it took about 4 sec
 | --- | --- |
 | Red start-check message on every page | Read it: it names the missing flag or driver. Fix the container settings and restart. |
 | "nvidia-smi is not in the container" | Add `--gpus all` (Extra Parameters) and install the Nvidia-Driver plugin. |
+| "This is an AMD card, but /dev/kfd is not in the container" | Add `--device /dev/kfd --device /dev/dri --group-add video` to Extra Parameters. |
+| "The engine in this image cannot run on this computer" | The image does not match the card or driver; see "Pick your image" in section 2. |
 | "Port 8080 is busy" | Another container uses the API port. Stop it or map another host port. |
 | Load stays at "Checking that the model files are complete" | Normal for a few minutes after a download. |
 | Unload did not finish | The banner names the state. Press Unload again. If it stays, restart the container. |

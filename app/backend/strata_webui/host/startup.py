@@ -230,8 +230,7 @@ def _check_engine(paths: Paths, runner: Runner, report: Report) -> None:
     report.errors.append(
         f"The engine in this image cannot run on this computer: {reason} "
         "NVIDIA: start the container with --gpus all and install the NVIDIA driver plugin on Unraid "
-        "(driver 580.65 or newer for cuda13). AMD: add --device /dev/kfd --device /dev/dri "
-        "--group-add <video group number> --group-add <render group number>. "
+        "(driver 580.65 or newer for cuda13). AMD: add --device /dev/kfd --device /dev/dri --group-add video. "
         "Then check that the image flavor matches the card."
     )
 
@@ -280,13 +279,12 @@ def _check_devices(paths: Paths, report: Report) -> None:
         if not (dev / "kfd").exists():
             report.errors.append(
                 "This is an AMD card, but /dev/kfd is not in the container. Add: --device /dev/kfd "
-                "--device /dev/dri --group-add <video group number> --group-add <render group number>"
+                "--device /dev/dri --group-add video"
             )
     elif report.backend == "sycl":
         if not any((dev / "dri").glob("renderD*")):
             report.errors.append(
-                "This is an Intel card, but /dev/dri is not in the container. Add: --device /dev/dri "
-                "--group-add <render group number>"
+                "This is an Intel card, but /dev/dri is not in the container. Add: --device /dev/dri"
             )
 
 

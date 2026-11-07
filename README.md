@@ -3,7 +3,7 @@
 A web UI for [Strata](https://github.com/Niko1221/Strata), the local LLM server for large
 mixture-of-experts models (Qwen, DeepSeek) on consumer GPUs. It is built `FROM` the official Strata
 image: one container, no Docker socket, no Strata code changed. It drops into Unraid or any other
-Docker host with an NVIDIA GPU.
+Docker host with an NVIDIA or AMD GPU.
 
 Strata's own Docker image loads one model, fixed by environment variables, at container start. This
 project keeps the container running without a model and lets you manage several model configs and
@@ -33,8 +33,11 @@ project.*
 
 ## Requirements
 
-- An NVIDIA GPU and driver 580.65 or newer (on Unraid: the Nvidia-Driver plugin), plus the NVIDIA
-  Container Toolkit (`--gpus all`).
+- A graphics card Strata supports, with the matching image (see "Image tags" below):
+  - NVIDIA: driver 580 or newer (575 or newer for `cuda12`); on Unraid the Nvidia-Driver plugin, elsewhere
+    the NVIDIA Container Toolkit (`--gpus all`).
+  - AMD RX 7000, RX 9000 or Strix Halo: the `amdgpu` kernel driver (built into Unraid), the devices
+    `/dev/kfd` and `/dev/dri` in the container, and `--group-add video`.
 - Disk space: 60 to 190 GB per model, on a fast disk.
 - RAM: depends on the model and RAM mode; see Strata's `docs/MODELS.md`.
 - amd64 only, like Strata's images.
@@ -59,7 +62,35 @@ docker run -d --name strata-supervisor --gpus all \
   ghcr.io/sognix/strata-supervisor:latest
 ```
 
+AMD (here an RX 7000):
+
+```sh
+docker run -d --name strata-supervisor \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  -p 8081:8081 -p 8080:8080 \
+  --ulimit memlock=-1:-1 --shm-size 2g \
+  -e ALLOWED_HOSTS=192.168.1.10,myserver \
+  -v /srv/strata/data:/data \
+  -v /srv/strata/config:/config \
+  ghcr.io/sognix/strata-supervisor:latest-rocm-gfx110x
+```
+
 Open `http://<server>:8081`. Nothing is loaded at start.
+
+### Image tags
+
+`ghcr.io/sognix/strata-supervisor`, one image per Strata flavor:
+
+| Tag | Cards |
+| --- | --- |
+| `latest` (= `latest-cuda13`) | NVIDIA RTX 20 to 50, driver 580 or newer |
+| `latest-cuda12` | older NVIDIA (GTX 10, P40, P100, V100) or driver 575 to 579 |
+| `latest-rocm-gfx120x` | AMD RX 9000, Radeon AI PRO R9700 |
+| `latest-rocm-gfx110x` | AMD RX 7900, 7800, 7700, 7600 |
+| `latest-rocm-gfx1151` | AMD Ryzen AI Max (Strix Halo) |
+
+Each release also has fixed tags such as `1.0.0` / `1.0.0-rocm-gfx110x` and `1.0` / `1.0-rocm-gfx110x`. `dev`
+and `dev-<flavor>` follow the main branch and are for testing.
 
 ## Configuration
 

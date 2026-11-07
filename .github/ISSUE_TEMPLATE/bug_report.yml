@@ -18,7 +18,7 @@ body:
     id: image
     attributes:
       label: Image tag
-      description: e.g. `ghcr.io/sognix/strata-supervisor:0.1.0`, `:latest` or `:dev`
+      description: e.g. `ghcr.io/sognix/strata-supervisor:1.0.0`, `:latest` or `:dev`
     validations:
       required: true
   - type: input
