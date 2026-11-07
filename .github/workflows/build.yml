@@ -1,0 +1,173 @@
+# Copyright (c) 2026 sognix
+# SPDX-License-Identifier: MIT
+#
+# Runs the unit tests, builds the image on GitHub-hosted runners and publishes it to
+# GitHub Container Registry (ghcr.io/<owner>/strata-supervisor).
+#
+#   pull request     -> tests + build + smoke test only (nothing is pushed)
+#   push to main     -> tests + build + smoke test + push :dev   (development builds)
+#   tag v1.2.3       -> tests + build + smoke test + push :1.2.3, :1.2 and :latest (releases)
+#   manual run       -> like a push to the branch/tag it runs on; optionally another Strata base tag
+#
+# :latest only ever changes through a version tag, never through a normal push.
+#
+# The image is the NVIDIA flavor (Strata's cuda13 image). Every image carries the Strata base
+# image it was built on as the label "strata.base". Runners have no GPU: the smoke test checks
+# that the web UI starts, reports the missing card and keeps the API port placeholder up.
+
+name: Build image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      strata_tag:
+        description: "Strata base image tag (e.g. 0.2.9-cuda13). Empty = the default in the Dockerfile."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/strata-supervisor
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Resolve Strata base tag
+        id: strata
+        env:
+          PINNED: ${{ inputs.strata_tag }}
+        run: |
+          if [ -n "$PINNED" ]; then
+            TAG="$PINNED"
+          else
+            TAG=$(sed -n 's/^ARG STRATA_TAG=//p' Dockerfile)
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::Could not determine the Strata base tag"
+            exit 1
+          fi
+          echo "Building on ghcr.io/niko1221/strata:$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=dev,enable={{is_default_branch}}
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=Strata Supervisor
+            org.opencontainers.image.description=Web UI to manage Strata models and load them by hand, one at a time
+            org.opencontainers.image.licenses=MIT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true # into the local docker engine, for the smoke test below
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            STRATA_TAG=${{ steps.strata.outputs.tag }}
+            VERSION=${{ steps.meta.outputs.version }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        env:
+          IMAGE_ID: ${{ steps.build.outputs.imageid }}
+        run: |
+          docker run -d --name smoke -p 8081:8081 -p 8080:8080 "$IMAGE_ID"
+
+          healthy=0
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8081/api/health >/dev/null; then
+              echo "Web UI is up"
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+
+          ok=1
+          [ "$healthy" = "1" ] || { echo "::error::web UI never became healthy"; ok=0; }
+          curl -sf http://localhost:8081/ | grep -q "Strata Supervisor" \
+            || { echo "::error::page not served"; ok=0; }
+          for f in app.js style.css logo.svg; do
+            curl -sf -o /dev/null "http://localhost:8081/$f" || { echo "::error::$f not served"; ok=0; }
+          done
+          # No GPU on the runner: the start checks must fail cleanly and block loading.
+          curl -sf http://localhost:8081/api/status \
+            | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["checks"]["errors"] and not s["checks"]["can_load"], s["checks"]' \
+            || { echo "::error::/api/status does not report the missing GPU"; ok=0; }
+          # API port placeholder: empty model list, 503 for everything else.
+          curl -sf http://localhost:8080/v1/models | grep -q '"data": \[\]' \
+            || { echo "::error::placeholder /v1/models wrong"; ok=0; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/v1/chat/completions)
+          [ "$code" = "503" ] || { echo "::error::placeholder answered $code instead of 503"; ok=0; }
+          # docker stop must stay well under Unraid's default 10 s.
+          start=$(date +%s)
+          docker stop smoke >/dev/null
+          took=$(( $(date +%s) - start ))
+          echo "docker stop took ${took}s"
+          [ "$took" -lt 10 ] || { echo "::error::docker stop took ${took}s"; ok=0; }
+
+          docker logs smoke
+          docker rm -f smoke >/dev/null
+          [ "$ok" = "1" ]
+
+      - name: Log in to ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # Pushed with buildx from the build cache (same inputs as the tested build), not with
+      # "docker push": newer Docker engines push an OCI image manifest, which the Unraid update
+      # check can't read ("not available"). Docker media types and no provenance give a plain
+      # Docker v2 manifest. A run on any other branch produces no tags - then it was a test build only.
+      - name: Push
+        if: github.event_name != 'pull_request' && steps.meta.outputs.tags != ''
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            STRATA_TAG=${{ steps.strata.outputs.tag }}
+            VERSION=${{ steps.meta.outputs.version }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          provenance: false
+          sbom: false
+          outputs: type=registry,oci-mediatypes=false

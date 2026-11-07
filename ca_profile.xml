@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<!-- Copyright (c) 2026 sognix
+     SPDX-License-Identifier: MIT -->
+<CommunityApplications>
+  <Profile>Strata Supervisor: a web UI for Strata, the local LLM server for large mixture-of-experts models on consumer GPUs. Manage several model configs and load one at a time by hand. A private hobby project, not affiliated with the Strata project. The template is in unraid/. Support via GitHub issues: https://github.com/sognix/strata-supervisor/issues</Profile>
+  <Icon>https://raw.githubusercontent.com/sognix/strata-supervisor/main/unraid/strata-supervisor.png</Icon>
+  <WebPage>https://github.com/sognix/strata-supervisor</WebPage>
+</CommunityApplications>

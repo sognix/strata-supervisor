@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strata Supervisor</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <aside>
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke-width="4.5" stroke-linecap="round"><path class="ring" d="M22.8 11.3A12 12 0 1 0 41.2 11.3"/><path class="stem" d="M32 4V18"/></g><rect class="bar" x="18" y="37" width="28" height="6" rx="3"/><rect class="mid" x="12" y="46.5" width="40" height="6" rx="3"/><rect class="bar" x="18" y="56" width="28" height="6" rx="3"/></svg>
+      <span>Strata<br>Supervisor</span>
+    </div>
+    <a class="nav" href="#/configs" data-route="configs"><span data-icon="models"></span>Model configs</a>
+    <div class="subnav" id="model-nav"></div>
+    <a class="nav" href="#/models" data-route="models"><span data-icon="disk"></span>Models</a>
+    <a class="nav" href="#/logs" data-route="logs"><span data-icon="logs"></span>Logs</a>
+    <a class="nav" href="#/hardware" data-route="hardware"><span data-icon="chip"></span>Hardware</a>
+    <div class="spacer"></div>
+    <a class="nav" href="#" id="theme"><span data-icon="theme"></span>Theme</a>
+  </aside>
+  <main>
+    <div class="topbar">
+      <button class="icon" id="toggle-side" title="Toggle sidebar"><span data-icon="sidebar"></span></button>
+      <div class="crumb" id="crumb"></div>
+      <div class="grow"></div>
+      <span class="dot" id="top-dot"></span><span id="top-state" class="badge"></span>
+      <button id="show-key">API key</button><span class="key hidden" id="key"></span>
+    </div>
+    <div class="content">
+      <div id="banners" style="display:grid;gap:8px"></div>
+      <div id="view"></div>
+    </div>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

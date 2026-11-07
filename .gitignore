@@ -1,0 +1,11 @@
+# Local notes for Claude Code sessions; not part of the public repo.
+STRATA-UPDATES.md
+CLAUDE.md
+.claude/
+
+# Local test mounts: models, keys and settings never go into the repo.
+local-mounts/
+
+__pycache__/
+*.pyc
+

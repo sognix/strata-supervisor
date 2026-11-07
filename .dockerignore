@@ -1,0 +1,11 @@
+# Keep the build context small: local-mounts/ may hold models of tens of GB.
+.git
+.github
+.claude
+local-mounts/
+tests/
+AI/
+docs/
+unraid/
+CLAUDE.md
+**/__pycache__

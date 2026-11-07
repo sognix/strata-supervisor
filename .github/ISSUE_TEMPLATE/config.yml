@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Problems with Strata itself
+    url: https://github.com/Niko1221/Strata/issues
+    about: Model quality, speed, engine crashes or downloads that fail in Strata itself
+  - name: Security vulnerability
+    url: https://github.com/sognix/strata-supervisor/security/advisories/new
+    about: Please report security issues privately

@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- Copyright (c) 2026 sognix
+     SPDX-License-Identifier: MIT -->
+<Container version="2">
+  <Name>strata-supervisor</Name>
+  <Repository>ghcr.io/sognix/strata-supervisor:latest</Repository>
+  <Registry>https://github.com/sognix/strata-supervisor/pkgs/container/strata-supervisor</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/sognix/strata-supervisor/issues</Support>
+  <Project>https://github.com/sognix/strata-supervisor</Project>
+  <Overview>Web UI for Strata, the local LLM server for large mixture-of-experts models (Qwen, DeepSeek) on consumer GPUs. Built on the official Strata image: keep several model configs side by side and load or unload one at a time, only by hand. Nothing loads at container start, nothing swaps by itself. Strata downloads a model on its first load; your own GGUF files work too.&#xD;
+&#xD;
+- Multi-GPU: one role per card (main, helper, off), also across different cards.&#xD;
+- RAM mode per model: all experts in RAM, only what no card holds, a RAM budget, or straight from the model files.&#xD;
+- OpenAI- and Anthropic-compatible API on port 8080 while a model is loaded.&#xD;
+&#xD;
+Needs an NVIDIA GPU with the Nvidia-Driver plugin (driver 580.65 or newer) and "--gpus all" in Extra Parameters (set by default). Models are 60 to 190 GB each: put the Strata data path on a fast disk with room.&#xD;
+&#xD;
+The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
+&#xD;
+Unofficial private project, not affiliated with the Strata project.</Overview>
+  <Changes>### 0.1.0&#xD;
+- First release.</Changes>
+  <Category>AI: Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:8081]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/sognix/strata-supervisor/main/unraid/strata-supervisor.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/sognix/strata-supervisor/main/unraid/strata-supervisor.png</Icon>
+  <ExtraParams>--gpus all --ulimit memlock=-1:-1 --shm-size 2g</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <Requires>An NVIDIA GPU, the Nvidia-Driver plugin (driver 580.65 or newer) and "--gpus all" in Extra Parameters. Lots of disk space for the models (60 to 190 GB each).</Requires>
+  <Config Name="Web UI port" Target="8081" Default="8081" Mode="tcp" Description="Web UI. Change only the host port here; set UI_PORT only with host networking." Type="Port" Display="always" Required="true" Mask="false">8081</Config>
+  <Config Name="API port" Target="8080" Default="8080" Mode="tcp" Description="OpenAI- and Anthropic-compatible API of the loaded model. Without a model it answers 503." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Strata data" Target="/data" Default="/mnt/user/appdata/strata" Mode="rw" Description="Models (60 to 190 GB each), Strata state and the API key. Put it on a fast disk with enough space." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/strata</Config>
+  <Config Name="Model configs" Target="/config" Default="/mnt/user/appdata/strata-supervisor" Mode="rw" Description="One TOML file per model config in models/, editable from the host." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/strata-supervisor</Config>
+  <Config Name="Own GGUF files" Target="/models" Default="" Mode="rw" Description="Optional: a host folder with GGUF files you already have, one sub-folder per model. Pick a sub-folder in a model config under GGUF file. Writable, so the Models page can delete a folder; set it to read-only if the web UI should never delete there." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="API key" Target="API_KEY" Default="" Mode="" Description="Key clients must send (16 characters or more). Empty: one is made once and kept in /data/state/api-key; the web UI shows it on request." Type="Variable" Display="always" Required="false" Mask="true"/>
+  <Config Name="Allowed host names" Target="ALLOWED_HOSTS" Default="" Mode="" Description="Recommended: the server's IP and name, comma separated, e.g. 192.168.1.10,tower. The web UI then answers only to these names, which stops other web pages from reaching it through DNS rebinding. Empty: any name." Type="Variable" Display="always" Required="false" Mask="false"/>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="Owner of the files the web UI writes in /config (99 = nobody)." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group of the files the web UI writes in /config (100 = users)." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="NVIDIA_VISIBLE_DEVICES" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="Cards visible to the container." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+  <Config Name="NVIDIA_DRIVER_CAPABILITIES" Target="NVIDIA_DRIVER_CAPABILITIES" Default="all" Mode="" Description="Driver features passed into the container." Type="Variable" Display="advanced" Required="false" Mask="false">all</Config>
+</Container>
