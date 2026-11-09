@@ -22,7 +22,11 @@ Pick the image for your card when you install: the default tag is for NVIDIA RTX
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
 Unofficial private project, not affiliated with the Strata project.</Overview>
-  <Changes>### v1.0.0&#xD;
+  <Changes>### v1.0.1&#xD;
+- Added new model options to the catalog, including ISTA-DAS Coder and three NVFP4 variants.&#xD;
+- Built on Strata 0.2.13.&#xD;
+&#xD;
+### v1.0.0&#xD;
 - First release.</Changes>
   <Category>AI: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8081]/</WebUI>

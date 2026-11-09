@@ -3,6 +3,12 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.1] - 2026-11-09
+
+Built on Strata `0.2.13`.
+
+- Added new model options to the catalog, including ISTA-DAS Coder and three NVFP4 variants.
+
 ## [v1.0.0] - 2026-11-07
 
 First public release. Built on Strata `0.2.12`, one image per flavor: `cuda13` (also the tags without suffix), `cuda12`,
