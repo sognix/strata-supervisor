@@ -224,10 +224,12 @@ function loadButton(name, withText) {
     onclick: (e) => { e.stopPropagation(); load(name); } }, icon("play"), withText ? "Load" : null);
 }
 
-// ---- Strata's prepared models, grouped like the desktop app (apps/host/src/lib/native-catalog.ts, v0.2.9)
+// ---- Strata's prepared models, grouped like the desktop app (apps/host/src/lib/native-catalog.ts, v0.2.13)
 
 const VERSION_LABELS = { Q2_0: "Fastest", IQ2_XS: "Compact", IQ3_XXS: "Balanced", IQ3_S: "High quality", IQ1_M: "Coding",
-  "Gyro-S": "Smallest", "Gyro-M": "Small memory", "IST-DAS-1.75bpw": "Smallest", "IST-DAS-2.00bpw": "Balanced", "IST-DAS-2.25bpw": "Best quality" };
+  "Gyro-S": "Smallest", "Gyro-M": "Small memory", "IST-DAS-1.75bpw": "Smallest", "IST-DAS-2.00bpw": "Balanced", "IST-DAS-2.25bpw": "Best quality",
+  "ISTA-DAS-Coder": "ISTA-DAS Coder",
+  NVFP4: "NVFP4 (Strata’s version)", "NVFP4-NVIDIA": "NVFP4 (NVIDIA’s version)", "NVFP4-QAD": "NVFP4 (NVIDIA, trained for FP4)" };
 const EDITIONS = { swift: "Swift 1.5", coder: "Coder", unsloth: "Unsloth", gyro: "Gyro" };
 const GROUPS = [
   { id: "qwen3.8", title: "Qwen3.8-Flash-Next" },
