@@ -3,7 +3,7 @@
 # only here; CI builds every flavor from it (.github/workflows/build.yml, matrix "flavor").
 #   NVIDIA RTX (default): docker build -t strata-supervisor .
 #   AMD RX 7000:          docker build --build-arg STRATA_FLAVOR=rocm-gfx110x -t strata-supervisor:rocm .
-ARG STRATA_VERSION=0.2.12
+ARG STRATA_VERSION=0.2.13
 ARG STRATA_FLAVOR=cuda13
 FROM ghcr.io/niko1221/strata:${STRATA_VERSION}-${STRATA_FLAVOR}
 
