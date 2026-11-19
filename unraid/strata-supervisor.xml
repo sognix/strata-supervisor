@@ -11,7 +11,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/sognix/strata-supervisor/issues</Support>
   <Project>https://github.com/sognix/strata-supervisor</Project>
-  <Overview>Web UI for Strata, the local LLM server for large mixture-of-experts models (Qwen, DeepSeek) on consumer GPUs. Built on the official Strata image: keep several model configs side by side and load or unload one at a time, only by hand. Nothing loads at container start, nothing swaps by itself. Strata downloads a model on its first load; your own GGUF files work too.&#xD;
+  <Overview>Web UI for Strata, the local LLM server for large mixture-of-experts models (Qwen) on consumer GPUs. Built on the official Strata image: keep several model configs side by side and load or unload one at a time, only by hand. Nothing loads at container start, nothing swaps by itself. Strata downloads a model on its first load; your own GGUF files work too.&#xD;
 &#xD;
 - Multi-GPU: one role per card (main, helper, off), also across different cards.&#xD;
 - RAM mode per model: all experts in RAM, only what no card holds, a RAM budget, or straight from the model files.&#xD;
@@ -22,7 +22,11 @@ Pick the image for your card when you install: the default tag is for NVIDIA RTX
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
 Unofficial private project, not affiliated with the Strata project.</Overview>
-  <Changes>### v1.0.1&#xD;
+  <Changes>### v1.0.2&#xD;
+- Strata 0.2.16 dropped DeepSeek-V4.1-Flash (0.2.13 was the last version that ran it), so it is gone from the list of prepared models and the fit markers too. A saved DeepSeek config no longer loads; downloaded DeepSeek files stay in place, delete them on the Models page if you no longer need them.&#xD;
+- Built on Strata 0.2.16.&#xD;
+&#xD;
+### v1.0.1&#xD;
 - Added new model options to the catalog, including ISTA-DAS Coder and three NVFP4 variants.&#xD;
 - Built on Strata 0.2.13.&#xD;
 &#xD;

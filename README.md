@@ -1,7 +1,7 @@
 # Strata Supervisor
 
 A web UI for [Strata](https://github.com/Niko1221/Strata), the local LLM server for large
-mixture-of-experts models (Qwen, DeepSeek) on consumer GPUs. It is built `FROM` the official Strata
+mixture-of-experts models (Qwen) on consumer GPUs. It is built `FROM` the official Strata
 image: one container, no Docker socket, no Strata code changed. It drops into Unraid or any other
 Docker host with an NVIDIA or AMD GPU.
 

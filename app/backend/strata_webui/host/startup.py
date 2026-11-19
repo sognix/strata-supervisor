@@ -4,10 +4,9 @@ The official entrypoint (docker/entrypoint.sh, tag v0.2.9) cannot be reused in p
 supervisor repeats the steps it needs (IMPLEMENTATION.md, section 4):
 
 1. create the folders under /data
-2. link the llama.cpp seed into /data/install, so the first start fetches nothing from GitHub
-3. drop run settings (/data/install/strata-*.json) that name a missing engine folder
-4. require `"usable": true` from `strata components engine --output json`
-5. require the device files of the card's backend in the container
+2. drop run settings (/data/install/strata-*.json) that name a missing engine folder
+3. require `"usable": true` from `strata components engine --output json`
+4. require the device files of the card's backend in the container
 
 Unlike the entrypoint, a failed check does not end the container: the UI keeps running and shows
 the problem, and loading a model stays blocked. Without the engine check `strata launch` would
@@ -42,7 +41,6 @@ class Paths:
     data: Path = Path("/data")
     config: Path = Path("/config")
     dev: Path = Path("/dev")
-    llama_seed: Path = Path("/opt/strata/seed/third_party/llama.cpp")
     strata_bin: Path = Path("/opt/strata/terminal/bin/strata")
     mountinfo: Path = Path("/proc/self/mountinfo")
     cpuinfo: Path = Path("/proc/cpuinfo")
@@ -92,7 +90,6 @@ def run_checks(paths: Paths, env: dict[str, str], runner: Runner = run_command) 
     _read_ports(env, report)
     if not _prepare_data(paths, report):
         return report
-    _link_llama_seed(paths, report)
     _warn_if_not_volume(paths, paths.data, "-v /mnt/user/appdata/strata:/data", report)
     try:
         owner = owner_from_env(env)
@@ -131,17 +128,6 @@ def _prepare_data(paths: Paths, report: Report) -> bool:
             report.errors.append(f"{paths.data} is not writable ({exc}). Map a host folder to /data.")
             return False
     return True
-
-
-def _link_llama_seed(paths: Paths, report: Report) -> None:
-    target = paths.install / "third_party" / "llama.cpp"
-    if not paths.llama_seed.is_dir() or target.exists() or target.is_symlink():
-        return
-    try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.symlink_to(paths.llama_seed)
-    except OSError as exc:
-        report.warnings.append(f"Could not link {paths.llama_seed} to {target} ({exc}). The first start may fetch llama.cpp from GitHub.")
 
 
 def _warn_if_not_volume(paths: Paths, mount_point: Path, example: str, report: Report) -> None:
