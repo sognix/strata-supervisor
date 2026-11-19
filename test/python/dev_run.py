@@ -30,7 +30,6 @@ paths = Paths(
     data=scratch / "data",
     config=scratch / "config",
     dev=scratch / "dev",
-    llama_seed=scratch / "no-seed",
     strata_bin=ROOT / "test" / "python" / "fake_strata.py",
     mountinfo=scratch / "no-mountinfo",
 )

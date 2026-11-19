@@ -92,7 +92,7 @@ The container runs as root (a known limit per Strata's docs).
 It `exec`s other commands right away, so its parts cannot be reused. The supervisor repeats:
 
 1. Create `/data/state`, `/data/home`, `/data/install`, `/data/Strata-data`.
-2. Symlink `/data/install/third_party/llama.cpp` to `/opt/strata/seed/third_party/llama.cpp` (else the first start downloads from GitHub).
+2. (Dropped with Strata 0.2.16.) Up to 0.2.13 the entrypoint linked `/data/install/third_party/llama.cpp` to `/opt/strata/seed/third_party/llama.cpp`. Since 0.2.16 Strata needs no llama.cpp (gguf-py ships in `/opt/strata/terminal/third_party/strata-gguf-py`), the image has no `/opt/strata/seed`, and the supervisor no longer creates the link. An old link in an existing `/data` is left in place; nothing reads it.
 3. Delete run configs (`/data/install/strata-*.json`) that point to missing paths under `/opt/strata/components/` (e.g. after an engine update). Model files stay.
 4. Check the engine: `strata components engine --output json` must report `"usable": true`.
 5. Check that `/dev/nvidia[0-9]*` exists.
@@ -393,10 +393,10 @@ Built with two Claude sessions (implementer + reviewer). Moved from a private re
 
 ## 15. What to check after a Strata update (2026-11-07)
 
-The UI depends on these places in Strata (written against `v0.2.9`). Check them for a new image tag (Renovate opens a PR for it, section 14). Last check: `v0.2.13` on 2026-11-09. Catalog probe, runtime folders, model folders and the display names (`tools/check_strata_catalog.py`) were compared with `v0.2.12`; engine log lines and launch output were not, the smoke test without GPU does not reach them.
+The UI depends on these places in Strata (written against `v0.2.9`). Check them for a new image tag (Renovate opens a PR for it, section 14). Last check: `v0.2.16` on 2026-11-19, against `v0.2.13`. Sources and the image were compared for every point below, and a local run on the 7900 XTX (`rocm-gfx110x`, engine 0.1.62, `coder IQ1_M`) went through catalog, plan, download, load, a chat request, unload, `docker stop` and a restart with the existing `/data`; split and CUDA were not tested (server only). Since `v0.2.16` Strata's repo is split into `engine/`, `app/`, `terminal/`, `docs/` and `tools/`: the Python sources named below are under `terminal/`, the desktop app under `app/` (was `apps/`), the Docker files under `tools/docker/`. The image has no `/opt/strata/seed` any more (section 4, step 2).
 
 - **Catalog probe** (`strata/catalog.py`, `CATALOG_PROBE`): `strata_cli.launch.catalog.Catalog`, `.strata.model_table()`, `.strata.own_families()`, `.tables()[1]` (field `tag`), `.contexts()`, `.contexts_for()`.
-- **Groups and plain names** of versions: rebuilt from `apps/host/src/lib/native-catalog.ts` (`app.js`: `VERSION_LABELS`, `EDITIONS`, `groupOf`).
+- **Groups and plain names** of versions: rebuilt from `app/host/src/lib/native-catalog.ts` (`apps/` up to 0.2.13) (`app.js`: `VERSION_LABELS`, `EDITIONS`, `groupOf`).
 - **Folder of a Strata model:** `models/<tag><Version>`, packs in `packs/<lowercase>` (`Catalog.model_folder`, `strata_control/models_move.py`).
 - **Engine log lines** (`strata/engine_report.py`): "slot sessions", "expert cache N slots, X GiB of VRAM", "resident RAM mode: X GiB", "loaded X GiB at", "conversation cache sized from the free RAM", "draft layer loaded", "MiB of VRAM free with everything loaded".
 - **Launch output** (`app.js`: `PROGRESS`): "Downloading the model files: x of y GB", "Getting the model files", "Downloading the draft layer".

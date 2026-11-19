@@ -39,12 +39,12 @@ SOFTWARE.
 
 These ship unchanged in the official Strata image this image is built on. They are listed here for
 information; their licenses and notices are those of the Strata image and of the projects themselves
-(see Strata's repository, including `third_party/`, and its `docker/Dockerfile`):
+(see Strata's repository, including `engine/third_party/`, and its `tools/docker/Dockerfile`):
 
 | Component | License | Source |
 |---|---|---|
 | Strata Terminal and engine package | MIT | https://github.com/Niko1221/Strata |
-| ggml / llama.cpp parts (model preparation tools) | MIT | https://github.com/ggml-org/llama.cpp |
+| llama.cpp's gguf-py and Hugging Face converter (`strata-gguf-py`, model preparation tools) | MIT | https://github.com/ggml-org/llama.cpp |
 | Python 3.12 (bundled with the Strata Terminal) | Python Software Foundation License | https://www.python.org/ |
 | tini | MIT | https://github.com/krallin/tini |
 | Ubuntu 24.04 base image and packages | various (per package) | https://ubuntu.com/ |

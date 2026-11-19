@@ -3,6 +3,15 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.2] - 2026-11-19
+
+Built on Strata `0.2.16`.
+
+- Strata 0.2.16 dropped DeepSeek-V4.1-Flash (0.2.13 was the last version that ran it),
+  so it is gone from the list of prepared models and the fit markers too.
+  A saved DeepSeek config no longer loads; downloaded DeepSeek files stay in place,
+  delete them on the Models page if you no longer need them.
+
 ## [v1.0.1] - 2026-11-09
 
 Built on Strata `0.2.13`.

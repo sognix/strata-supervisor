@@ -19,7 +19,7 @@ const EST = {
   baseGib: 1.5,           // the engine's own process memory (anon)
 };
 // Bytes per token and layer of the KV cache by format, 13 attention layers, 5.4 % overhead, 121 MiB per session
-// (apps/host/src/lib/native-fit.ts, cacheGb).
+// (app/host/src/lib/native-fit.ts, cacheGb; apps/ up to Strata 0.2.13).
 const KV_BYTES = { fp16: 2112, int8: 1056, q4_0: 576, k8v4: 816 };
 let idleVramUsed = {};  // VRAM other programs used on each card while no model was loaded (card index -> MiB)
 // Where Strata keeps the models it downloads itself (docs/USER-GUIDE.md, section 4).
@@ -224,22 +224,19 @@ function loadButton(name, withText) {
     onclick: (e) => { e.stopPropagation(); load(name); } }, icon("play"), withText ? "Load" : null);
 }
 
-// ---- Strata's prepared models, grouped like the desktop app (apps/host/src/lib/native-catalog.ts, v0.2.13)
+// ---- Strata's prepared models, grouped like the desktop app (app/host/src/lib/native-catalog.ts, v0.2.16)
 
 const VERSION_LABELS = { Q2_0: "Fastest", IQ2_XS: "Compact", IQ3_XXS: "Balanced", IQ3_S: "High quality", IQ1_M: "Coding",
-  "Gyro-S": "Smallest", "Gyro-M": "Small memory", "IST-DAS-1.75bpw": "Smallest", "IST-DAS-2.00bpw": "Balanced", "IST-DAS-2.25bpw": "Best quality",
-  "ISTA-DAS-Coder": "ISTA-DAS Coder",
+  "Gyro-S": "Smallest", "Gyro-M": "Small memory",
   NVFP4: "NVFP4 (Strata’s version)", "NVFP4-NVIDIA": "NVFP4 (NVIDIA’s version)", "NVFP4-QAD": "NVFP4 (NVIDIA, trained for FP4)" };
 const EDITIONS = { swift: "Swift 1.5", coder: "Coder", unsloth: "Unsloth", gyro: "Gyro" };
 const GROUPS = [
   { id: "qwen3.8", title: "Qwen3.8-Flash-Next" },
   { id: "qwen3.6", title: "Qwen3.6-35B-A3B" },
-  { id: "deepseek41", title: "DeepSeek-V4.1-Flash" },
 ];
 
 function groupOf(row) {
   const text = `${row.family_title || ""} ${row.family || ""}`;
-  if (row.family === "deepseek41") return { id: "deepseek41", title: row.family_title || "DeepSeek-V4.1-Flash" };
   if (/qwen3[._-]?6|35b[-_]?a3b/i.test(text)) return GROUPS[1];
   if (["qwen", "swift", "coder", "unsloth", "gyro"].includes(row.family) || /qwen3[._-]?8|flash.next/i.test(row.family_title || "")) return GROUPS[0];
   return { id: row.family, title: row.family_title || row.family };
@@ -251,12 +248,11 @@ function versionLabel(row) {
   return [edition, label === row.model && edition ? "" : label].filter(Boolean).join(" · ");
 }
 
-/** The rows `strata launch` can start, in the app's groups. The app hides DeepSeek's UD-Q8 sizes. */
+/** The rows `strata launch` can start, in the app's groups. */
 function catalogGroups() {
   const rows = (models && models.catalog.rows) || [];
   const groups = new Map();
   for (const row of rows) {
-    if (row.family === "deepseek41" && /^UD-Q8/i.test(row.model || "")) continue;
     const g = groupOf(row);
     if (!groups.has(g.id)) groups.set(g.id, { ...g, rows: [] });
     groups.get(g.id).rows.push(row);
@@ -854,7 +850,7 @@ function settingsForm(body, name, entry) {
     if (!h) return null;
     const text = [h.name, h.repo_url, h.basename, h.finetune].filter(Boolean).join(" ").toLowerCase();
     const families = new Set(cat.rows.map((r) => r.family));
-    const words = [["coder", "coder"], ["swift", "swift"], ["unsloth", "unsloth"], ["gyro", "gyro"], ["nvfp4", "nvfp4"], ["deepseek", "deepseek41"]];
+    const words = [["coder", "coder"], ["swift", "swift"], ["unsloth", "unsloth"], ["gyro", "gyro"], ["nvfp4", "nvfp4"]];
     const hits = words.filter(([w, fam]) => families.has(fam) && text.includes(w)).map(([, fam]) => fam);
     if (hits.length === 1) return hits[0];
     if (!hits.length && families.has("qwen") && /qwen3[._-]?8|flash.next|gsq-rco/.test(text)) return "qwen";
@@ -1175,15 +1171,11 @@ const PIN_HEADROOM_GIB = 4;
  *   ok:   the experts fit on the cards and in RAM ("Only what no card holds"), nothing is read from the SSD
  *   slow: runs only with "RAM budget" or "From the model files", so part of the experts is read from the SSD
  *   no:   the experts that do not fit on the cards are more than the container's RAM and swap together
- * null when the version or the container's RAM is unknown, and for DeepSeek (see below).
+ * null when the version or the container's RAM is unknown.
  */
 function fitOf(cfg) {
   const limits = (status && status.limits) || {};
   if (!limits.ram_bytes) return null;
-  // DeepSeek-V4.1-Flash is spread over every card and the SSD by its own plan (strata_control/dsv41_fit.py); its
-  // catalog figures do not follow the rules above, so it gets no mark. "Plan" asks Strata instead.
-  const row = catalogRow(cfg);
-  if (row && (row.multi_file || row.family === "deepseek41")) return null;
   const est = memoryEstimate({ ...cfg, ram_mode: "resident-experts" });
   if (!est) return null;
   const ram = limits.ram_bytes / GIB, swap = (limits.swap_bytes || 0) / GIB;

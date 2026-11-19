@@ -52,7 +52,6 @@ class StartupTest(unittest.TestCase):
         self.root = root
         (root / "dev").mkdir()
         (root / "dev" / "nvidia0").touch()
-        (root / "seed").mkdir()
         (root / "cpuinfo").write_text("processor : 0\nflags : fpu sse avx avx2\n")
         (root / "memory.max").write_text("max\n")
         self.mountinfo = root / "mountinfo"
@@ -61,7 +60,6 @@ class StartupTest(unittest.TestCase):
             data=root / "data",
             config=root / "config",
             dev=root / "dev",
-            llama_seed=root / "seed",
             strata_bin=root / "strata",
             mountinfo=self.mountinfo,
             cpuinfo=root / "cpuinfo",
@@ -91,9 +89,6 @@ class StartupTest(unittest.TestCase):
             self.assertTrue((self.paths.data / name).is_dir(), name)
         self.assertTrue(self.paths.models_config.is_dir())
         self.assertEqual(self.paths.models_config.stat().st_mode & 0o777, DIR_MODE)
-        link = self.paths.install / "third_party" / "llama.cpp"
-        self.assertTrue(link.is_symlink())
-        self.assertEqual(os.readlink(link), str(self.paths.llama_seed))
         self.assertIsNone(report.memory_limit_bytes)
 
     def test_engine_not_usable_blocks_loading(self) -> None:
