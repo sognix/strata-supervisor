@@ -102,6 +102,7 @@ button.icon:hover:not(:disabled) { color: var(--text); background: var(--soft); 
 button.icon.danger, button.icon.danger:hover:not(:disabled) { color: var(--bad); }
 button.big { padding: 9px 18px; }
 button:disabled { opacity: .45; cursor: default; }
+select:disabled, input:disabled { opacity: .5; cursor: default; }
 button svg, span[data-icon] svg { width: 16px; height: 16px; display: block; }
 
 /* chips: page tabs, log switchers, source tabs, quick card choices */
@@ -110,6 +111,7 @@ button svg, span[data-icon] svg { width: 16px; height: 16px; display: block; }
 .chip:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .chip.on { border-color: var(--accent); background: var(--accent-bg); }
 .chip small { color: var(--muted); font-weight: 400; }
+.chip.disabled, .chip.disabled:hover { opacity: .45; cursor: default; border-color: var(--line); }
 
 /* tiles: RAM modes, cards, hardware facts */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }

@@ -46,6 +46,15 @@ class EngineReportTest(unittest.TestCase):
         lines = ["strata generate: expert cache 100 slots, 10.00 GiB of VRAM", "strata generate: expert cache 50 slots, 5.50 GiB of VRAM"]
         self.assertEqual(engine_report.parse(lines)["vram_experts_gib"], 15.5)
 
+    def test_qwen36_lines(self) -> None:
+        # Worded as engine/src/qwen35/q36_engine.cu prints them (Strata v0.2.17); the numbers are made up.
+        hybrid = ["strata-q36: 2 sessions (--batch): 1.51 GiB of VRAM each at a context of 32768 (3.02 GiB in all), 12.00 GiB free before them",
+                  "strata-q36: hybrid experts: 120 of 256 per layer in VRAM (9.30 GiB), all 19.80 GiB in pinned host memory, the rest"]
+        self.assertEqual(engine_report.parse(hybrid),
+                         {"sessions": 2, "session_gib": 1.51, "vram_experts_gib": 9.3, "ram_experts_gib": 19.8})
+        all_vram = engine_report.parse(["strata-q36: every routed expert in VRAM (19.80 GiB) in 4.1 s"])
+        self.assertEqual(all_vram, {"vram_experts_gib": 19.8, "ram_experts_gib": 0.0})
+
     def test_no_run_or_no_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             log = Path(tmp) / "m.engine.log"

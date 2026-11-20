@@ -25,6 +25,14 @@ PATTERNS = {
     "mtp": re.compile(r"draft layer loaded, (\d+) MiB of VRAM"),
     # "900 MiB of VRAM free with everything loaded"
     "vram_free": re.compile(r"(\d+) MiB of VRAM free with everything loaded"),
+    # Qwen3.6-35B-A3B runs on its own engine (strata-q36) with its own lines. Taken from the engine's source
+    # (engine/src/qwen35/q36_engine.cu, Strata v0.2.17), not from a real log yet.
+    # "strata-q36: 2 sessions (--batch): 1.51 GiB of VRAM each at a context of 32768 (3.02 GiB in all), ..."
+    "q36_sessions": re.compile(r"strata-q36: (\d+) sessions \(--batch\): ([\d.]+) GiB of VRAM each"),
+    # "strata-q36: every routed expert in VRAM (19.80 GiB) in 4.1 s": nothing of the experts in RAM
+    "q36_all_vram": re.compile(r"strata-q36: every routed expert in VRAM \(([\d.]+) GiB\)"),
+    # "strata-q36: hybrid experts: 120 of 256 per layer in VRAM (9.30 GiB), all 19.80 GiB in pinned host memory, ..."
+    "q36_hybrid": re.compile(r"strata-q36: hybrid experts: \d+ of \d+ per layer in VRAM \(([\d.]+) GiB\), all ([\d.]+) GiB in \S+ host memory"),
 }
 MAX_LOG_BYTES = 16 * 1024 * 1024
 GIB_PER_MIB = 1 / 1024
@@ -60,9 +68,15 @@ def parse(lines: list[str]) -> dict:
             m = pattern.search(line)
             if not m:
                 continue
-            if key == "sessions":
+            if key in ("sessions", "q36_sessions"):
                 out["sessions"] = int(m.group(1))
                 out["session_gib"] = float(m.group(2))
+            elif key == "q36_all_vram":
+                out["vram_experts_gib"] = float(m.group(1))
+                out["ram_experts_gib"] = 0.0
+            elif key == "q36_hybrid":
+                out["vram_experts_gib"] = float(m.group(1))
+                out["ram_experts_gib"] = float(m.group(2))
             elif key == "vram_experts":
                 cache_gib += float(m.group(2))
                 out["vram_experts_gib"] = round(cache_gib, 2)

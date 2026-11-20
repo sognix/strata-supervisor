@@ -9,7 +9,7 @@ The user is not a designer and gives no pixel details. Goal: clear, related thin
 The "Model" section of the config form has two tabs, **Prepared Strata model** and **GGUF file**; only one is active.
 
 - **Source:** Strata's catalog (`Catalog().strata.model_table()`, `app/backend/strata_webui/strata/catalog.py`). No own list.
-- **Only what starts:** app-only models (e.g. family `qwen36`) are left out; `strata launch` 0.2.9 does not know them (`IMPLEMENTATION.md` section 13).
+- **Every family `strata launch` offers:** since Strata 0.2.16 that includes the own-path family `qwen36` (Qwen3.6-35B-A3B, Strata #5869). Up to 0.2.13 it was app-only and the probe skipped it (`IMPLEMENTATION.md` section 13). The probe marks own-path rows with `own_path` and passes the catalog's `context_fit`.
 - **Shown like the desktop app** (`app/host/src/lib/native-catalog.ts`, Strata 0.2.16; `apps/` up to 0.2.13): groups "Qwen3.8-Flash-Next" (editions Swift, Coder, Unsloth, Gyro), "Qwen3.6-35B-A3B". DeepSeek-V4.1-Flash was dropped with Strata 0.2.16 (0.2.13 was the last version that ran it). Plain names: `Q2_0` Fastest, `IQ2_XS` Compact, `IQ3_XXS` Balanced, `IQ3_S` High quality, `IQ1_M` Coding, `Gyro-S` Smallest, `Gyro-M` Small memory. Plus download size and `ON DISK`.
 - **Selecting** fills Version, Family and a name proposal (e.g. `q2_0-32k`, `coder-iq1_m-32k`). Not the context: the catalog has no default context per model.
 - With "Prepared", `model_path` is saved empty. Never put the Strata model's path there: a value switches Strata to "own files" and it starts the model differently. Strata finds its models under `/data/Strata-data/models` itself.
@@ -35,6 +35,7 @@ Five sections as cards, numbered, with heading and more space between them:
 Fixed action bar with **Save** and **Plan**. Plan asks Strata with the unsaved form values (`POST /api/models/<name>/plan` with `{"config": …}`) and saves nothing.
 
 - **Max context under "Context":** for own GGUF folders and downloaded Strata models from the file header (`<arch>.context_length`, "says its file"), else from the catalog (`Catalog.contexts_for`, "Strata offers up to …"). The folder of a Strata model comes from the catalog probe (`tag` + version, like `Catalog.model_folder`). More than the trained length turns the field yellow, not red: Strata allows it and only warns.
+- **Own-path models (Qwen3.6):** when the chosen version has `own_path`, the form disables KV format and both VRAM reserve fields, hides the RAM mode tiles behind a note, offers no "Split" chip and no helper role, and turns helpers off (its engine runs on the first visible card, `IMPLEMENTATION.md` section 6). The saved config then has `ram_mode = "normal"`, no reserve and only one card on. The model page shows these settings as "not used by this model" and adds the context cache on the main card to the memory table.
 - **Validation while typing:** a field gets a red border as soon as its value is wrong and loses it when right; the reason is in the tooltip. Rules match `model_config.py`. Required fields (Name, Folder, Version) turn red only on save when empty. A server error marks and focuses the matching field.
 
 ## 3. Look

@@ -3,6 +3,17 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.3] - 2026-11-20
+
+Built on Strata `0.2.17`.
+
+- Added support for the Qwen3.6-35B-A3B model, which runs on a dedicated engine path using only the main GPU.
+- When configuring Qwen3.6-35B-A3B, the KV format, RAM mode, and VRAM reserve settings are disabled as they are not used by this model.
+- The "Split over all cards" option is hidden for Qwen3.6-35B-A3B, and helper roles are disabled since the model runs on a single card.
+- Updated memory estimates for Qwen3.6-35B-A3B to reflect that experts are kept in RAM if they do not fit on the main card, with no conversation cache in RAM.
+- The model overview page now displays specific memory usage details for Qwen3.6-35B-A3B, including context cache on the main card and expert placement.
+- Improved detection of Qwen3.6-35B-A3B model files by name to automatically select the correct family.
+
 ## [v1.0.2] - 2026-11-19
 
 Built on Strata `0.2.16`.
