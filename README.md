@@ -18,8 +18,9 @@ project.*
   of the same model are fine (e.g. different contexts).
 - **Load and unload only by hand.** Nothing loads at container start, nothing loads or swaps by
   itself. Switching models needs no container restart.
-- **Strata's catalog in the form**: models grouped like in Strata's desktop app, with download size,
-  `ON DISK` and a fit marker for your cards and RAM. Or pick a folder of your own GGUF files.
+- **Strata's catalog in the form**: models grouped like in Strata's desktop app (Qwen3.8-Flash-Next
+  and Qwen3.6-35B-A3B), with download size, `ON DISK` and a fit marker for your cards and RAM. Or
+  pick a folder of your own GGUF files.
 - **Multi-GPU through roles** (main, helper, off), passed as `--gpu-roles`. Card numbers come from
   `nvidia-smi`, never from the code.
 - **RAM mode per model**: all experts in RAM, only what no card holds, a RAM budget, or straight
@@ -151,6 +152,8 @@ To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 - The UI depends on some internals of Strata (catalog, log lines, folder layout). A new Strata
   version may need an update of this project; the Strata version is pinned in the `Dockerfile`
   (`STRATA_VERSION`).
+- Qwen3.6-35B-A3B runs on one card only (Strata's own engine path for it); the form sets the other
+  cards to off. Tested locally on an RX 7900 XTX only.
 - Only one model is loaded at a time. Strata's "one model per card" mode is not supported.
 - Tuning (`--tune`) is not offered.
 

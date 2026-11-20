@@ -21,6 +21,10 @@ const EST = {
 // Bytes per token and layer of the KV cache by format, 13 attention layers, 5.4 % overhead, 121 MiB per session
 // (app/host/src/lib/native-fit.ts, cacheGb; apps/ up to Strata 0.2.13).
 const KV_BYTES = { fp16: 2112, int8: 1056, q4_0: 576, k8v4: 816 };
+// Families with an engine path of their own (Qwen3.6-35B-A3B, Strata 0.2.16 and later): the recurrent state of one
+// more session (setup.py, OWN_PATH_FAMILIES "state_gb" 0.07 GB). Their cache size per token comes from the catalog.
+const OWN_PATH_STATE_GIB = 0.07e9 / GIB;
+const isOwnPath = (row) => Boolean(row && row.own_path);
 let idleVramUsed = {};  // VRAM other programs used on each card while no model was loaded (card index -> MiB)
 // Where Strata keeps the models it downloads itself (docs/USER-GUIDE.md, section 4).
 const STRATA_MODELS_DIR = "/data/Strata-data/models";
@@ -434,13 +438,15 @@ function overviewTab(body, name, entry) {
     }).join(", ");
   };
   const mono = (t) => el("span", { class: "mono" }, t);
+  const own = isOwnPath(catalogRow(cfg));  // Qwen3.6: its own engine, which skips KV format, RAM mode and VRAM reserve
+  const unused = el("span", { class: "muted" }, "not used by this model");
   const settings = facts([
     ["Model", titleOf(cfg, name)], ["Version", cfg.model ? mono([cfg.family, cfg.model].filter(Boolean).join(" ")) : "—"],
     ["Own model files", cfg.model_path ? mono(cfg.model_path) : "—"], ["Context", mono(cfg.context)],
-    ["KV format", mono(cfg.kv)], ["Pictures", cfg.vision], ["Draft layer", cfg.mtp || "Strata's choice"],
+    ["KV format", own ? unused.cloneNode(true) : mono(cfg.kv)], ["Pictures", cfg.vision], ["Draft layer", cfg.mtp || "Strata's choice"],
     ["Parallel requests", cfg.parallel || "fit to the cards"], ["Cards", roleText()],
-    ["RAM mode", ramModeLabel(cfg)],
-    ["VRAM reserve", reserveText(cfg)], ["Advanced", cfg.extra_set.length ? mono(cfg.extra_set.join(" ")) : "—"],
+    ["RAM mode", own ? unused.cloneNode(true) : ramModeLabel(cfg)],
+    ["VRAM reserve", own ? unused.cloneNode(true) : reserveText(cfg)], ["Advanced", cfg.extra_set.length ? mono(cfg.extra_set.join(" ")) : "—"],
   ]);
   const notes = cfg.notes ? el("p", { class: "muted", style: "white-space:pre-wrap;margin:0" }, cfg.notes) : null;
   const memBody = el("div", { style: "display:grid;gap:12px" });
@@ -464,9 +470,10 @@ function overviewTab(body, name, entry) {
     const measuredTotal = typeof m.ram_experts_gib === "number"
       ? m.ram_experts_gib + (m.conversation_gib || 0) + EST.baseGib : null;
     const rows = [
-      ["Experts on the cards", est ? `≈ ${gib(est.onCards)}` : "—", mGib(m.vram_experts_gib)],
-      ["Experts in RAM", est ? `≈ ${gib(est.ramExperts[cfg.ram_mode])}` : "—", mGib(m.ram_experts_gib)],
-      ["Conversation cache", `up to ${gib(EST.conversationGib)}`, mGib(m.conversation_gib)],
+      [est && est.ownPath ? "Experts on the main card" : "Experts on the cards", est ? `≈ ${gib(est.onCards)}` : "—", mGib(m.vram_experts_gib)],
+      ...(est && est.ownPath ? [["Context cache (main card)", `≈ ${gib(est.cardCacheGib)}`, typeof m.session_gib === "number" ? gib(m.session_gib * (m.sessions || 1)) : "—"]] : []),
+      ["Experts in RAM", est ? `≈ ${gib(est.ramExperts[cfg.ram_mode] ?? est.ramExperts.normal)}` : "—", mGib(m.ram_experts_gib)],
+      ["Conversation cache", est && est.ownPath ? "none on this engine" : `up to ${gib(EST.conversationGib)}`, mGib(m.conversation_gib)],
       ["Engine itself", `≈ ${gib(EST.baseGib)}`, "≈ " + gib(EST.baseGib)],
       ["RAM in total", est ? `≈ ${gib(est.total(cfg.ram_mode))}` : "unknown", measuredTotal !== null ? "≈ " + gib(measuredTotal) : "—"],
     ];
@@ -478,7 +485,9 @@ function overviewTab(body, name, entry) {
     const now = live && usage && usage.anon !== undefined ? el("div", { class: "seg", style: "gap:6px;align-items:center" }, "Container now:",
       badge(`${gib((usage.anon + usage.shmem) / GIB)} held`, "plain"), badge(`${gib(usage.file_cache / GIB)} file cache`, "plain")) : null;
     memBody.replaceChildren(...[table, now].filter(Boolean),
-      el("p", { class: "hint", style: "margin:0" }, "The estimate follows Strata's rules with sizes measured on one card; the real values come from the engine log after a load. "
+      el("p", { class: "hint", style: "margin:0" }, (est && est.ownPath
+        ? "This model runs on Strata's own engine path on the main card only. When not every expert fits there, the engine keeps all of them in RAM. "
+        : "") + "The estimate follows Strata's rules with sizes measured on one card; the real values come from the engine log after a load. "
         + "The file cache (model files read at load) is not counted: the system frees it when RAM is needed."));
   }
   async function loadMeasured() {
@@ -580,6 +589,7 @@ function settingsForm(body, name, entry) {
   let source = cfg.model_path ? "gguf" : "prepared";
   let roles = parseRoles(cfg.gpu_roles);
   let autoName = "";  // the last suggested name; replaced on the next pick as long as nobody typed over it
+  let ownMode = null; // the chosen version runs on an engine path of its own (syncOwnPath)
 
   const input = (attrs) => el("input", { autocomplete: "off", ...attrs });
   const select = (fname, value, options) => el("select", { name: fname },
@@ -613,9 +623,10 @@ function settingsForm(body, name, entry) {
 
   // 2. Run
   const ctxExplain = el("i", {}, "e.g. 32k, 128k or tokens");
+  const kvExplain = el("i");
   const section2 = card({ num: 2, title: "Run", hint: "context and engine" }, el("div", { class: "fields" },
     field("Context", input({ name: "context", class: "mono", list: "dl-contexts", value: cfg.context }), ctxExplain),
-    field("KV format", select("kv", cfg.kv, [["int8", "int8 (default)"], ["k8v4", "k8v4 (23 % less than int8)"], ["q4_0", "q4_0 (about half of int8)"], ["fp16", "fp16 (twice int8)"]])),
+    el("label", { class: "f" }, el("b", {}, "KV format"), select("kv", cfg.kv, [["int8", "int8 (default)"], ["k8v4", "k8v4 (23 % less than int8)"], ["q4_0", "q4_0 (about half of int8)"], ["fp16", "fp16 (twice int8)"]]), kvExplain),
     field("Pictures (vision)", select("vision", cfg.vision, [["off", "off"], ["on", "on"], ["gpu", "on, reader on the card"], ["cpu", "on, reader on the CPU"]])),
     field("Draft layer (MTP)", select("mtp", cfg.mtp, [["", "Strata's choice"], ["on", "on"], ["off", "off (saves about 1 GB VRAM, slower)"]])),
     field("Parallel requests", input({ name: "parallel", class: "mono", type: "number", min: 0, max: 8, value: cfg.parallel }), "0 = fit to the cards")));
@@ -623,7 +634,9 @@ function settingsForm(body, name, entry) {
   // 3. Cards
   const quick = el("div");
   const gpuTiles = el("div", { class: "tiles" });
-  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, quick, gpuTiles,
+  const cardsNote = el("div", { class: "banner note hidden" },
+    "This model runs on one card only, the main one. The other cards stay off; as helpers they would take the main card's place, because its engine uses the first card it sees.");
+  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, cardsNote, quick, gpuTiles,
     el("div", { class: "hint" }, status && status.gpus.length
       ? "Exactly one card is main. The numbers are the ones --gpu-roles expects; engine logs (CUDA0, CUDA1) and plan texts (GPU 1, GPU 2) count differently."
       : "No cards found. Strata chooses."));
@@ -632,16 +645,22 @@ function settingsForm(body, name, entry) {
   const reserveFirst = el("b", {}, "First card");
   const reserveLater = el("b", {}, "Later cards");
   const ramTiles = el("div", { class: "tiles two" });
+  const reserveFirstExplain = el("i");
+  const reserveLaterExplain = el("i");
+  // Qwen3.6 (an engine path of its own) has no RAM modes: the engine places the experts itself.
+  const ownRamNote = el("div", { class: "banner note hidden" },
+    "This model runs on Strata's own engine path: it keeps every expert it can on the main card, and when not all fit, a copy of every expert in RAM. "
+    + "There are no RAM modes and no VRAM reserve. To leave VRAM free for other programs, set expert-vram=GiB (the experts' share of the card) under Advanced.");
   const budgetMax = limits.ram_bytes ? Math.floor((limits.ram_bytes + (limits.swap_bytes || 0)) / GIB) : 4096;
   const budgetDefault = cfg.ram_budget_gib || (limits.ram_bytes ? Math.max(1, Math.floor(limits.ram_bytes / GIB)) : 28);
   const budgetInput = input({ type: "number", name: "ram_budget_gib", class: "budget", min: 1, max: budgetMax, value: budgetDefault });
   const section4 = card({ num: 4, title: "Memory", hint: "VRAM reserve and RAM" },
     el("div", { class: "fields two" },
       el("label", { class: "f" }, reserveFirst, input({ name: "vram_reserve_mib", class: "mono", type: "number", min: 0, max: 262144, placeholder: "MiB", value: cfg.vram_reserve_mib ?? "" }),
-        el("i", {}, "first card in Strata's order · empty = Strata's default")),
+        reserveFirstExplain),
       el("label", { class: "f" }, reserveLater, input({ name: "vram_reserve_later_mib", class: "mono", type: "number", min: 0, max: 262144, placeholder: "MiB", value: cfg.vram_reserve_later_mib ?? "" }),
-        el("i", {}, "later cards · empty = Strata's default"))),
-    ramTiles,
+        reserveLaterExplain)),
+    ramTiles, ownRamNote,
     el("div", { class: "hint" }, "Estimates include the conversation cache (up to 8 GiB) and the engine itself, not the file cache the system frees when needed. After a load, the model page shows what Strata reported."));
 
   // 5. Advanced (collapsed)
@@ -853,6 +872,7 @@ function settingsForm(body, name, entry) {
     const words = [["coder", "coder"], ["swift", "swift"], ["unsloth", "unsloth"], ["gyro", "gyro"], ["nvfp4", "nvfp4"]];
     const hits = words.filter(([w, fam]) => families.has(fam) && text.includes(w)).map(([, fam]) => fam);
     if (hits.length === 1) return hits[0];
+    if (!hits.length && families.has("qwen36") && /qwen3[._-]?6|35b[-_]?a3b/.test(text)) return "qwen36";
     if (!hits.length && families.has("qwen") && /qwen3[._-]?8|flash.next|gsq-rco/.test(text)) return "qwen";
     return null;
   }
@@ -885,8 +905,25 @@ function settingsForm(body, name, entry) {
     updateEstimates();
   }
 
+  /** Qwen3.6 and other own-path families: one card, no KV format, RAM modes or VRAM reserve. Runs when the version changes. */
+  function syncOwnPath() {
+    const own = isOwnPath(catalogRow({ model: modelInput.value.trim(), family: familyInput.value.trim() }));
+    if (own === ownMode) return;
+    ownMode = own;
+    f.kv.disabled = own;
+    kvExplain.textContent = own ? "not used: this model's engine keeps its own cache format" : "";
+    for (const n of [f.vram_reserve_mib, f.vram_reserve_later_mib]) n.disabled = own;
+    reserveFirstExplain.textContent = own ? "not used by this model" : "first card in Strata's order · empty = Strata's default";
+    reserveLaterExplain.textContent = own ? "not used by this model" : "later cards · empty = Strata's default";
+    ramTiles.classList.toggle("hidden", own);
+    ownRamNote.classList.toggle("hidden", !own);
+    if (own) for (const k of Object.keys(roles)) if (roles[k] === "helper") roles[k] = "off";
+    renderCards();
+  }
+
   function renderChosen() {
     updateContextInfo();
+    syncOwnPath();
     const row = catalogRow({ model: modelInput.value.trim(), family: familyInput.value.trim() });
     const toggle = el("button", { type: "button", onclick: () => { picker.classList.toggle("hidden"); renderPicker(); } },
       picker.classList.contains("hidden") ? (row ? "Change" : "Choose a model") : "Close list");
@@ -945,7 +982,7 @@ function settingsForm(body, name, entry) {
     const gpus = status ? status.gpus : [];
     const current = rolesText();
     const options = gpus.map((g) => [`only-${g.index}`, `Only ${g.index}`, g.name]);
-    if (gpus.length > 1) options.push(["split", "Split over all cards"]);
+    if (gpus.length > 1 && !ownMode) options.push(["split", "Split over all cards"]);
     const onlyText = (i) => gpus.map((x) => `${x.index}=${x.index === i ? "main" : "off"}`).join(",");
     const chosenQuick = gpus.length > 1 && current === defaultRoles() ? "split"
       : (gpus.find((g) => current === onlyText(g.index)) ? `only-${gpus.find((g) => current === onlyText(g.index)).index}` : "");
@@ -959,15 +996,17 @@ function settingsForm(body, name, entry) {
       return el("div", { class: "tile" + (role !== "off" ? " on" : "") },
         el("div", { class: "h" }, el("span", { class: "idx" }, String(g.index)), el("span", {}, g.name)),
         el("div", { class: "hint" }, g.vram_total_mib ? `${(g.vram_total_mib / 1024).toFixed(0)} GiB VRAM` : "VRAM unknown"),
-        el("div", { class: "roles" }, ...["main", "helper", "off"].map((r) =>
-          el("a", { class: "chip" + (r === role ? " on" : ""), role: "button", onclick: () => setRole(g.index, r) }, r))));
+        el("div", { class: "roles" }, ...["main", "helper", "off"].map((r) => ownMode && r === "helper"
+          ? el("a", { class: "chip disabled", title: "This model runs on the main card only." }, r)
+          : el("a", { class: "chip" + (r === role ? " on" : ""), role: "button", onclick: () => setRole(g.index, r) }, r))));
     }));
+    cardsNote.classList.toggle("hidden", !ownMode || gpus.length < 2);
     updateReserveLabels();
     updateEstimates();
   }
 
   function setRole(index, role) {
-    if (role === "main") for (const k of Object.keys(roles)) if (roles[k] === "main") roles[k] = "helper";
+    if (role === "main") for (const k of Object.keys(roles)) if (roles[k] === "main") roles[k] = ownMode ? "off" : "helper";
     roles[index] = role;
     renderCards();
   }
@@ -1023,9 +1062,9 @@ function settingsForm(body, name, entry) {
       model: modelInput.value.trim(), family: familyInput.value.trim(), model_path: source === "gguf" ? pathInput.value.trim() : "",
       context: f.context.value.trim(), kv: f.kv.value, vision: f.vision.value, mtp: f.mtp.value,
       parallel: Number(f.parallel.value || 0), gpu_roles: status && status.gpus.length ? rolesText() : "",
-      ram_mode: mode ? mode.value : "normal",
-      ram_budget_gib: mode && mode.value === "budget" ? Number(budgetInput.value || 0) : 0,
-      vram_reserve_mib: num(f.vram_reserve_mib.value), vram_reserve_later_mib: num(f.vram_reserve_later_mib.value),
+      ram_mode: mode && !ownMode ? mode.value : "normal",
+      ram_budget_gib: mode && !ownMode && mode.value === "budget" ? Number(budgetInput.value || 0) : 0,
+      vram_reserve_mib: ownMode ? null : num(f.vram_reserve_mib.value), vram_reserve_later_mib: ownMode ? null : num(f.vram_reserve_later_mib.value),
       extra_set: f.extra_set.value.split("\n").map((x) => x.trim()).filter(Boolean), notes: f.notes.value,
     };
   }
@@ -1131,6 +1170,38 @@ function sessionGib(cfg) {
   return (121 + contextTokens(cfg.context) * 13 * bytes * 1.054 / 2 ** 20) / 1024;
 }
 
+/** Other programs' VRAM on a card: measured now when nothing is loaded, else the last value seen while idle. */
+function othersMib(g) {
+  return !(status && status.model.active) ? (g.vram_used_mib || 0) : (idleVramUsed[g.index] || 0);
+}
+
+/**
+ * Qwen3.6-35B-A3B and other families with an engine path of their own (Strata's strata_control/own_path_fit.py and
+ * setup.py, install_own_path, v0.2.17): one card only, the main one. The card holds a fixed part (dense weights,
+ * buffers, staging) and the context cache of each session; the experts get what is left. When they do not all fit,
+ * the engine keeps a copy of every expert in RAM (its "hybrid" mode). No RAM modes, no VRAM reserve, no KV format.
+ */
+function ownPathEstimate(cfg, row, experts) {
+  const fit = row.context_fit || {};
+  const roles = parseRoles(cfg.gpu_roles);
+  const main = (status ? status.gpus : []).find((g) => roles[g.index] === "main");
+  // Parallel 0: Strata fits the sessions to the card; it started 3 on the RX 7900 XTX at 32K (2026-11-20), as for Flash-Next.
+  const sessions = cfg.parallel || EST.sessions;
+  const cacheGib = (contextTokens(cfg.context) * (fit.bytes_per_token || 0)) / GIB;
+  const extraStateGib = (sessions - 1) * OWN_PATH_STATE_GIB;
+  let onCards = 0;
+  if (main && typeof fit.fixed_gb === "number") {
+    const card = ((main.vram_total_mib || 0) - othersMib(main)) / 1024;
+    onCards = Math.min(experts, Math.max(0, card - fit.fixed_gb - sessions * cacheGib - extraStateGib));
+  }
+  const inRam = onCards >= experts ? 0 : experts;
+  const ramExperts = Object.fromEntries(RAM_MODES.map((m) => [m.id, inRam]));
+  // No conversation cache in RAM: that is Flash-Next's engine (generate.cpp); strata-q36 has none (measured 2026-11-20:
+  // UD-Q4_K_XL held 19.2 GiB in the container with 18.75 GiB of experts pinned).
+  return { experts, onCards, ramExperts, conversation: 0, base: EST.baseGib, ownPath: true,
+    cardCacheGib: sessions * cacheGib, total: () => inRam + EST.baseGib };
+}
+
 /** Where the experts of these settings would go, in GiB. null when the version is not in Strata's list. */
 function memoryEstimate(cfg) {
   const row = catalogRow(cfg);
@@ -1138,12 +1209,11 @@ function memoryEstimate(cfg) {
   if (row && typeof row.experts_gb === "number" && row.experts_gb > 0) experts = row.experts_gb;
   else if (row && typeof row.memory_gb === "number" && row.memory_gb > 1) experts = row.memory_gb - 1;
   if (experts === null) return null;
-  const active = status && status.model.active;
+  if (isOwnPath(row)) return ownPathEstimate(cfg, row, experts);
   const cards = engineOrder(cfg.gpu_roles);
   let free = 0;
   cards.forEach((g, i) => {
-    // Other programs' VRAM: measured now when nothing is loaded, else the last value seen while idle.
-    const others = !active ? (g.vram_used_mib || 0) : (idleVramUsed[g.index] || 0);
+    const others = othersMib(g);
     const reserve = (i === 0 ? cfg.vram_reserve_mib : cfg.vram_reserve_later_mib) ?? EST.reserveMib;
     free += Math.max(0, ((g.vram_total_mib || 0) - others - reserve) / 1024 - EST.afterCacheGib);
   });
@@ -1179,8 +1249,17 @@ function fitOf(cfg) {
   const est = memoryEstimate({ ...cfg, ram_mode: "resident-experts" });
   if (!est) return null;
   const ram = limits.ram_bytes / GIB, swap = (limits.swap_bytes || 0) / GIB;
-  const need = est.ramExperts["resident-experts"] + est.base + PIN_HEADROOM_GIB;
   const where = `${limits.ram_from === "container" ? "container limit" : "host, no container limit"}`;
+  if (est.ownPath) {
+    // No SSD mode on this engine path: the experts that no card holds must fit in RAM (page-locked, swap does not help).
+    const inRam = est.ramExperts.normal;
+    const need = inRam + est.base + (inRam ? PIN_HEADROOM_GIB : 0);
+    const text = inRam
+      ? `About ${gib(need)} RAM needed: every expert is kept in RAM (${gib(inRam)}) because not all fit on the main card, engine ${gib(est.base)}, ${PIN_HEADROOM_GIB} GiB headroom; RAM ${gib(ram)} (${where}).`
+      : `Every expert fits on the main card (${gib(est.onCards)}); about ${gib(need)} RAM for the engine; RAM ${gib(ram)} (${where}).`;
+    return need <= ram ? { level: "ok", label: "fits", text } : { level: "no", label: "too big", text };
+  }
+  const need = est.ramExperts["resident-experts"] + est.base + PIN_HEADROOM_GIB;
   const text = `About ${gib(need)} RAM needed without SSD reads (experts ${gib(est.ramExperts["resident-experts"])}, engine ${gib(est.base)}, `
     + `${PIN_HEADROOM_GIB} GiB headroom); RAM ${gib(ram)} (${where}), swap ${gib(swap)}.`;
   if (need <= ram) return { level: "ok", label: "fits", text };

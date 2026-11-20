@@ -150,6 +150,20 @@ to the modes are rough.
 If you limit the container's RAM (Extra Parameters `--memory 25g --memory-swap -1`, for example), the UI takes
 the limit into account.
 
+### Qwen3.6-35B-A3B
+
+Strata runs Qwen3.6-35B-A3B (versions `UD-Q4_K_XL`, `UD-Q6_K_XL`, `Q8_0`) on an engine of its own. Some settings
+work differently for it, and the form adapts when you pick it:
+
+- **One card only**, the main one. The other cards are set to **off**; helper is not offered.
+- **No KV format, no RAM modes, no VRAM reserve.** The engine keeps every expert it can on the main card. When
+  not all fit, it keeps a copy of every expert in RAM (page-locked, so swap does not help). The fit marker
+  says "too big" when that copy does not fit the container's RAM.
+- **To leave VRAM free** for other programs, put `expert-vram=12` (GiB for the experts on the card) under
+  **Advanced**.
+- Context, pictures, draft layer and parallel requests work as usual. Each request slot keeps its own context
+  cache on the card (about 1.4 GiB per 32K), so more parallel requests leave less room for the experts.
+
 ## 7. Loading, unloading, switching
 
 - **Load** (▶): starts the model. Only possible while no other model is loaded.

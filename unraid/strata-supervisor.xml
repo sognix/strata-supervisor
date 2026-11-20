@@ -22,7 +22,16 @@ Pick the image for your card when you install: the default tag is for NVIDIA RTX
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
 Unofficial private project, not affiliated with the Strata project.</Overview>
-  <Changes>### v1.0.2&#xD;
+  <Changes>### v1.0.3&#xD;
+- Added support for the Qwen3.6-35B-A3B model, which runs on a dedicated engine path using only the main GPU.&#xD;
+- When configuring Qwen3.6-35B-A3B, the KV format, RAM mode, and VRAM reserve settings are disabled as they are not used by this model.&#xD;
+- The "Split over all cards" option is hidden for Qwen3.6-35B-A3B, and helper roles are disabled since the model runs on a single card.&#xD;
+- Updated memory estimates for Qwen3.6-35B-A3B to reflect that experts are kept in RAM if they do not fit on the main card, with no conversation cache in RAM.&#xD;
+- The model overview page now displays specific memory usage details for Qwen3.6-35B-A3B, including context cache on the main card and expert placement.&#xD;
+- Improved detection of Qwen3.6-35B-A3B model files by name to automatically select the correct family.&#xD;
+- Built on Strata 0.2.17.&#xD;
+&#xD;
+### v1.0.2&#xD;
 - Strata 0.2.16 dropped DeepSeek-V4.1-Flash (0.2.13 was the last version that ran it), so it is gone from the list of prepared models and the fit markers too. A saved DeepSeek config no longer loads; downloaded DeepSeek files stay in place, delete them on the Models page if you no longer need them.&#xD;
 - Built on Strata 0.2.16.&#xD;
 &#xD;

@@ -40,17 +40,21 @@ def max_context(family, model):
         return max(int(c) for c in cat.contexts_for(family, model))
     except Exception:
         return None
-own = cat.strata.own_families()  # app-only families: `strata launch` does not offer them (Catalog.rows())
+try:
+    own = cat.strata.own_families()  # families with an engine path of their own (Qwen3.6-35B-A3B): one card, no RAM modes
+except Exception:
+    own = {}
+# Every family of the table, as Catalog.rows() lists them since Strata 0.2.16 (#5869).
 for fam in cat.strata.model_table(hw):
-    if fam.get("family") in own and not own[fam["family"]].get("multi_file"):
-        continue
     for size in fam.get("sizes") or []:
+        fit = size.get("context_fit")  # own-path families: the card's need before the context, and bytes per context token
         rows.append({
             "family": fam.get("family"), "family_title": fam.get("title"), "model": size.get("model"),
             "about": size.get("about"), "download_gb": size.get("download_gb"), "experts_gb": size.get("experts_gb"),
             "memory_gb": size.get("memory_gb"), "installed": bool(size.get("installed")),
             "experimental": bool(size.get("experimental") or fam.get("experimental")), "images": bool(size.get("images")),
-            "multi_file": bool(size.get("multi_file")),
+            "own_path": bool((own.get(fam.get("family")) or {}).get("own_path")),
+            "context_fit": fit if isinstance(fit, dict) else None,
             "folder": (families.get(fam.get("family")) or {}).get("tag", "") + str(size.get("model") or ""),
             "max_context": max_context(fam.get("family"), size.get("model")),
         })
