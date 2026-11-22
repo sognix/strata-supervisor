@@ -3,8 +3,11 @@
 Strata's downloads live in /data/Strata-data/models/<folder> (one folder per version, plus loose files such as the
 picture reader's mmproj), its prepared data for a version in /data/Strata-data/packs/<folder in lower case>
 (strata_control/models_move.py: "models/<tag>", "packs/<tag>"). Deleting a Strata model removes both; the shared
-draft layer (mtp) stays. Own GGUF files are the folders in /models. Strata has no delete command, so this module
-deletes, but only an entry it listed itself, never a path from outside, and never while a model runs.
+draft layer (mtp) stays. Families with .strata files of their own (Hy4-Flash, Inkling-2-Mini, Strata 0.2.18 and
+later) keep every build in one folder, models/<family>, and Hy4-Flash's builds share one Engram file there, so such a
+folder is listed file by file: one build can go while the others and the shared file stay.
+Own GGUF files are the folders in /models. Strata has no delete command, so this module deletes, but only an entry
+it listed itself, never a path from outside, and never while a model runs.
 """
 
 from __future__ import annotations
@@ -43,6 +46,20 @@ def folder_bytes(path: Path) -> int:
     return _size(path)[0]
 
 
+def files_bytes(folder: Path, names: list[str]) -> int:
+    """Bytes of the named files in a folder, with their unfinished parts (a name followed by anything, e.g. .part)."""
+    total = 0
+    for path in _children(folder):
+        if path.is_file() and any(path.name == n or path.name.startswith(n + ".") for n in names):
+            total += _size(path)[0]
+    return total
+
+
+def _holds_strata_files(path: Path) -> bool:
+    """A folder of a family with .strata files of its own: listed file by file."""
+    return path.is_dir() and not path.is_symlink() and any(p.suffix == ".strata" for p in _children(path))
+
+
 def _entry(path: Path, kind: str) -> dict:
     size, shared = _size(path)
     out = {"name": path.name, "path": str(path), "kind": kind, "size_bytes": size, "hard_linked": shared,
@@ -67,6 +84,11 @@ def listing(strata_data: Path, own_root: Path) -> dict:
     for path in _children(models):
         if path.name.endswith((".done", ".part")):
             continue                                   # marks and unfinished downloads belong to their file
+        if _holds_strata_files(path):
+            for child in _children(path):
+                if not child.name.endswith((".done", ".part")):
+                    strata.append({**_entry(child, "folder" if child.is_dir() else "file"), "name": f"{path.name}/{child.name}"})
+            continue
         entry = _entry(path, "folder" if path.is_dir() else "file")
         pack = packs / path.name.lower()
         if path.is_dir() and pack.is_dir():

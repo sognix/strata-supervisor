@@ -24,6 +24,15 @@ MTP_MODES = ("", "on", "off")
 ROLES = ("main", "helper", "off")
 RAM_MODES = ("normal", "resident-experts", "budget", "mmap-experts")
 
+# Families with an engine program and .strata files of their own (Strata 0.2.18 and later; runner.py and setup.py
+# name them the same way). Their engines take no KV format, RAM mode, VRAM reserve or draft layer, and refuse flags
+# they do not know (serve/hy4_kind.py), so to_flags() leaves those out. Pictures are on or off, and the drafter
+# built into the model file is switched off with `--drafting off`.
+NATIVE_FAMILIES = frozenset({"hy4-flash", "inkling-2-mini"})
+# Inkling-2-Mini serves 1 to 64 requests at once (strata_control/inkling_fit.py, MAX_PARALLEL); the others up to 8.
+MAX_PARALLEL = {"inkling-2-mini": 64}
+DEFAULT_MAX_PARALLEL = 8
+
 MODEL_SIZE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,47}")
 FAMILY = re.compile(r"[a-z0-9][a-z0-9_.-]{0,31}")
 CONTEXT = re.compile(r"[0-9]{1,8}|[0-9]{1,5}[kKmM]")
@@ -110,8 +119,11 @@ def _validate(cfg: ModelConfig, roots: tuple[Path, ...]) -> None:
     _one_of("vision", cfg.vision, VISION_MODES)
     _one_of("mtp", cfg.mtp, MTP_MODES)
     _one_of("ram_mode", cfg.ram_mode, RAM_MODES)
-    if not 0 <= cfg.parallel <= 8:
-        raise ConfigError("parallel must be 0 (fit to the cards) or 1 to 8.")
+    top = MAX_PARALLEL.get(cfg.family, DEFAULT_MAX_PARALLEL)
+    if not 0 <= cfg.parallel <= top:
+        raise ConfigError(f"parallel must be 0 (fit to the cards) or 1 to {top}.")
+    if cfg.family in NATIVE_FAMILIES and cfg.vision not in ("off", "on"):
+        raise ConfigError("vision must be 'off' or 'on' for this model: its engine has its own picture reader.")
     if cfg.ram_mode == "budget":
         if not 1 <= cfg.ram_budget_gib <= 4096:
             raise ConfigError("The RAM budget must be 1 to 4096 GiB.")
@@ -186,24 +198,30 @@ def to_flags(cfg: ModelConfig) -> list[str]:
         flags += ["--family", cfg.family]
     if cfg.model_path:
         flags += ["--model-path", cfg.model_path]
-    flags += ["--context", cfg.context, "--kv", cfg.kv]
+    native = cfg.family in NATIVE_FAMILIES
+    flags += ["--context", cfg.context]
+    if not native:
+        flags += ["--kv", cfg.kv]
     flags += ["--vision", cfg.vision]  # always explicit, the defaults disagree (IMPLEMENTATION.md, 5.11)
-    if cfg.mtp:
+    if native and cfg.mtp == "off":
+        flags += ["--drafting", "off"]  # the drafter in the model file (DFly2, DSpark); on is the engine's default
+    elif cfg.mtp and not native:
         flags += ["--mtp", cfg.mtp]
     if cfg.parallel:
         flags += ["--parallel", str(cfg.parallel)]
     if cfg.gpu_roles:
         flags += ["--gpu-roles", cfg.gpu_roles]  # roles only, never --gpu (IMPLEMENTATION.md, 5.2)
-    if cfg.ram_mode == "resident-experts":
-        flags += ["--set", "resident-experts="]
-    elif cfg.ram_mode == "budget":
-        flags += ["--set", f"resident-budget-gib={cfg.ram_budget_gib}"]
-    elif cfg.ram_mode == "mmap-experts":
-        flags += ["--set", "mmap-experts="]
-    if cfg.vram_reserve_mib is not None:
-        flags += ["--set", f"vram-reserve-mib={cfg.vram_reserve_mib}"]
-    if cfg.vram_reserve_later_mib is not None:
-        flags += ["--set", f"vram-reserve-later-mib={cfg.vram_reserve_later_mib}"]
+    if not native:  # these engines have no RAM mode and no VRAM reserve
+        if cfg.ram_mode == "resident-experts":
+            flags += ["--set", "resident-experts="]
+        elif cfg.ram_mode == "budget":
+            flags += ["--set", f"resident-budget-gib={cfg.ram_budget_gib}"]
+        elif cfg.ram_mode == "mmap-experts":
+            flags += ["--set", "mmap-experts="]
+        if cfg.vram_reserve_mib is not None:
+            flags += ["--set", f"vram-reserve-mib={cfg.vram_reserve_mib}"]
+        if cfg.vram_reserve_later_mib is not None:
+            flags += ["--set", f"vram-reserve-later-mib={cfg.vram_reserve_later_mib}"]
     for entry in cfg.extra_set:
         flags += ["--set", entry]
     return flags

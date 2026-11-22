@@ -13,3 +13,6 @@ test/unraid/*.json
 __pycache__/
 *.pyc
 
+
+# IMPL Files 
+AI/FUTURE-IMPL.md

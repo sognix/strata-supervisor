@@ -19,7 +19,7 @@ project.*
 - **Load and unload only by hand.** Nothing loads at container start, nothing loads or swaps by
   itself. Switching models needs no container restart.
 - **Strata's catalog in the form**: models grouped like in Strata's desktop app (Qwen3.8-Flash-Next
-  and Qwen3.6-35B-A3B), with download size, `ON DISK` and a fit marker for your cards and RAM. Or
+  Qwen3.6-35B-A3B, Tencent Hy4-Flash and Inkling-2-Mini), with download size, `ON DISK` and a fit marker for your cards and RAM. Or
   pick a folder of your own GGUF files.
 - **Multi-GPU through roles** (main, helper, off), passed as `--gpu-roles`. Card numbers come from
   `nvidia-smi`, never from the code.
@@ -154,6 +154,9 @@ To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
   (`STRATA_VERSION`).
 - Qwen3.6-35B-A3B runs on one card only (Strata's own engine path for it); the form sets the other
   cards to off. Tested locally on an RX 7900 XTX only.
+- Tencent Hy4-Flash and Inkling-2-Mini (Strata 0.2.18 and 0.2.19) run on engines of their own. Hy4-Flash
+  uses one card; Inkling-2-Mini can use two NVIDIA cards, but Strata 0.2.19 may fail to set it up that way
+  (there may be a bug in Strata there). Not tested on real cards yet.
 - Only one model is loaded at a time. Strata's "one model per card" mode is not supported.
 - Tuning (`--tune`) is not offered.
 

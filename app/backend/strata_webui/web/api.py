@@ -15,7 +15,7 @@ from ..host.gpus import GpuSource
 from ..host.startup import Report
 from ..strata import catalog
 from ..strata.engine_report import memory_report
-from ..strata import model_files, own_models
+from ..strata import known_problems, model_files, own_models
 from ..strata import model_config as mc
 from ..strata.launcher import LaunchError, Launcher
 from ..strata.placeholder import Placeholder
@@ -93,7 +93,16 @@ class AppState:
         else:
             state.update(state="stopped", error=None, phase=None, exit_code=None)
         state["download"] = self._download_size(active) if active and state["launch_running"] else None
+        state["known_problem"] = self._known_problem(active) if active and not state["launch_running"] else None
         return state
+
+    def _known_problem(self, name: str) -> str | None:
+        """A plain explanation when the last launch of `name` failed on a known Strata problem (known_problems.py)."""
+        try:
+            cfg = self.store.load(name)
+        except mc.ConfigError:
+            return None
+        return known_problems.launch_problem(cfg, self.launcher.output(name))
 
     def _download_size(self, name: str) -> dict | None:
         """While a Strata model loads: how big its folder is now and how big the download is in all.
@@ -113,13 +122,24 @@ class AppState:
                 if str(r.get("model", "")).lower() == cfg.model.lower() and (not cfg.family or r.get("family") == cfg.family)]
         if len(rows) != 1 or not rows[0].get("folder") or not isinstance(rows[0].get("download_gb"), (int, float)):
             return None
-        wanted = str(rows[0]["folder"]).lower()
+        row = rows[0]
+        wanted = str(row["folder"]).lower()
         try:
             folder = next((p for p in self.strata_models_dir.iterdir() if p.name.lower() == wanted), None)
         except OSError:
             folder = None
+        if row.get("native") and isinstance(row.get("files"), list):
+            # One folder holds every build of the family (and Hy4-Flash's shared Engram file): count only this
+            # build's files, the picture reader's only when pictures are on.
+            files = [f for f in row["files"] if isinstance(f, dict) and isinstance(f.get("bytes"), int)
+                     and (cfg.vision != "off" or "vision" not in str(f.get("name", "")).lower())]
+            if not files:
+                return None
+            names = [str(f["name"]) for f in files]
+            return {"bytes": model_files.files_bytes(folder, names) if folder else 0,
+                    "total_bytes": sum(f["bytes"] for f in files)}
         size = model_files.folder_bytes(folder) if folder else 0
-        return {"bytes": size, "total_bytes": int(rows[0]["download_gb"] * 1e9)}
+        return {"bytes": size, "total_bytes": int(row["download_gb"] * 1e9)}
 
     def _query_gpus(self) -> dict:
         if self.gpu_source is None:
