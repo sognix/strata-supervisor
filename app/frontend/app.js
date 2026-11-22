@@ -25,6 +25,13 @@ const KV_BYTES = { fp16: 2112, int8: 1056, q4_0: 576, k8v4: 816 };
 // more session (setup.py, OWN_PATH_FAMILIES "state_gb" 0.07 GB). Their cache size per token comes from the catalog.
 const OWN_PATH_STATE_GIB = 0.07e9 / GIB;
 const isOwnPath = (row) => Boolean(row && row.own_path);
+// Families with an engine program and .strata files of their own (Strata 0.2.18 and later): "hy4" (Tencent Hy4-Flash)
+// and "inkling" (Inkling-2-Mini). No KV format, RAM modes, VRAM reserve or draft layer; the drafter is built into the
+// model file. Hy4-Flash runs on one card and one request at a time; Inkling-2-Mini serves up to 64 requests and uses two
+// NVIDIA cards together (setup.py, install_hy4_flash and install_inkling2, v0.2.19).
+const nativeKind = (row) => (row && row.native) || null;
+const NATIVE_PARALLEL = { hy4: 1, inkling: 64 };
+const GB_PER_GIB = GIB / 1e9;
 let idleVramUsed = {};  // VRAM other programs used on each card while no model was loaded (card index -> MiB)
 // Where Strata keeps the models it downloads itself (docs/USER-GUIDE.md, section 4).
 const STRATA_MODELS_DIR = "/data/Strata-data/models";
@@ -228,10 +235,11 @@ function loadButton(name, withText) {
     onclick: (e) => { e.stopPropagation(); load(name); } }, icon("play"), withText ? "Load" : null);
 }
 
-// ---- Strata's prepared models, grouped like the desktop app (app/host/src/lib/native-catalog.ts, v0.2.16)
+// ---- Strata's prepared models, grouped like the desktop app (app/host/src/lib/native-catalog.ts, v0.2.19)
 
 const VERSION_LABELS = { Q2_0: "Fastest", IQ2_XS: "Compact", IQ3_XXS: "Balanced", IQ3_S: "High quality", IQ1_M: "Coding",
   "Gyro-S": "Smallest", "Gyro-M": "Small memory",
+  "SQ-64": "Flagship", "SQ-96": "High quality", "SQ-128": "Highest quality", "SQ-20": "Lossless", "SQ-15": "Flagship", "SQ-10": "Compact",
   NVFP4: "NVFP4 (Strata’s version)", "NVFP4-NVIDIA": "NVFP4 (NVIDIA’s version)", "NVFP4-QAD": "NVFP4 (NVIDIA, trained for FP4)" };
 const EDITIONS = { swift: "Swift 1.5", coder: "Coder", unsloth: "Unsloth", gyro: "Gyro" };
 const GROUPS = [
@@ -326,6 +334,7 @@ function renderShell() {
   if (status.placeholder.error && !m.active) add("error", status.placeholder.error);
   if (status.gpu_error) add("error", status.gpu_error);
   if (m.error && m.active) add("error", `Strata reports for ${m.active}: ${m.error}`);
+  if (m.known_problem && m.active) add("error", m.known_problem);  // known_problems.py: a Strata problem in plain words
   if (status.unload.error) add("error", status.unload.error);
   if (status.unload.result && status.unload.result.state !== "stopped")
     add("error", `Unload did not finish: the model is ${status.unload.result.state}. A new model can be loaded only after it is stopped.`);
@@ -438,12 +447,16 @@ function overviewTab(body, name, entry) {
     }).join(", ");
   };
   const mono = (t) => el("span", { class: "mono" }, t);
-  const own = isOwnPath(catalogRow(cfg));  // Qwen3.6: its own engine, which skips KV format, RAM mode and VRAM reserve
+  const row = catalogRow(cfg);
+  const native = nativeKind(row);
+  // Qwen3.6 and the native .strata families: their own engines skip KV format, RAM mode and VRAM reserve
+  const own = isOwnPath(row) || Boolean(native);
   const unused = el("span", { class: "muted" }, "not used by this model");
   const settings = facts([
     ["Model", titleOf(cfg, name)], ["Version", cfg.model ? mono([cfg.family, cfg.model].filter(Boolean).join(" ")) : "—"],
     ["Own model files", cfg.model_path ? mono(cfg.model_path) : "—"], ["Context", mono(cfg.context)],
-    ["KV format", own ? unused.cloneNode(true) : mono(cfg.kv)], ["Pictures", cfg.vision], ["Draft layer", cfg.mtp || "Strata's choice"],
+    ["KV format", own ? unused.cloneNode(true) : mono(cfg.kv)], ["Pictures", cfg.vision],
+    native ? ["Drafter", cfg.mtp === "off" ? "off" : "on (built into the model file)"] : ["Draft layer", cfg.mtp || "Strata's choice"],
     ["Parallel requests", cfg.parallel || "fit to the cards"], ["Cards", roleText()],
     ["RAM mode", own ? unused.cloneNode(true) : ramModeLabel(cfg)],
     ["VRAM reserve", own ? unused.cloneNode(true) : reserveText(cfg)], ["Advanced", cfg.extra_set.length ? mono(cfg.extra_set.join(" ")) : "—"],
@@ -469,6 +482,20 @@ function overviewTab(body, name, entry) {
     memHint.textContent = !measured ? "not loaded yet" : live ? "measured: running now" : `measured: last run, ${m.started || "?"}`;
     const measuredTotal = typeof m.ram_experts_gib === "number"
       ? m.ram_experts_gib + (m.conversation_gib || 0) + EST.baseGib : null;
+    if (est && est.native) {
+      // Strata's own placement (hy4_fit / inkling_fit) for this computer; this UI does not read these engines' logs yet.
+      const nrows = [["Experts on the card", `≈ ${gib(est.onCards)}`], ["Experts in RAM", `≈ ${gib(est.inRam)}`],
+        ["Read from the SSD", est.ssd > 0 ? `≈ ${gib(est.ssd)}` : "nothing"]];
+      memHint.textContent = "Strata's figures";
+      memBody.replaceChildren(el("div", { style: "display:grid;grid-template-columns:max-content 1fr;gap:7px 24px" },
+        ...nrows.flatMap(([k, a]) => [el("span", { class: "muted" }, k), el("span", { class: "mono" }, a)])),
+        el("p", { class: "hint", style: "margin:0" }, `Where Strata places this build's experts on this computer, at a context of ${est.contextText} `
+          + "and with pictures on. The engine, its buffers and the context cache come on top. "
+          + (est.ssd > 0 ? "What does not fit in VRAM and RAM is read from the SSD while the model answers: that is much slower. " : "")
+          + (native === "hy4" ? "Hy4-Flash also reads its Engram file from the SSD all the time, so it needs a fast SSD. " : "")
+          + "The UI does not read this engine's own memory lines yet."));
+      return;
+    }
     const rows = [
       [est && est.ownPath ? "Experts on the main card" : "Experts on the cards", est ? `≈ ${gib(est.onCards)}` : "—", mGib(m.vram_experts_gib)],
       ...(est && est.ownPath ? [["Context cache (main card)", `≈ ${gib(est.cardCacheGib)}`, typeof m.session_gib === "number" ? gib(m.session_gib * (m.sessions || 1)) : "—"]] : []),
@@ -589,7 +616,9 @@ function settingsForm(body, name, entry) {
   let source = cfg.model_path ? "gguf" : "prepared";
   let roles = parseRoles(cfg.gpu_roles);
   let autoName = "";  // the last suggested name; replaced on the next pick as long as nobody typed over it
-  let ownMode = null; // the chosen version runs on an engine path of its own (syncOwnPath)
+  let ownMode = null; // the chosen version runs on an engine of its own: no KV format, RAM modes or VRAM reserve (syncOwnPath)
+  let oneCard = false; // ... and on the main card only
+  let native = null;   // "hy4" or "inkling": a family with .strata files and an engine program of its own
 
   const input = (attrs) => el("input", { autocomplete: "off", ...attrs });
   const select = (fname, value, options) => el("select", { name: fname },
@@ -624,19 +653,25 @@ function settingsForm(body, name, entry) {
   // 2. Run
   const ctxExplain = el("i", {}, "e.g. 32k, 128k or tokens");
   const kvExplain = el("i");
+  const visionExplain = el("i");
+  const mtpLabel = el("b", {}, "Draft layer (MTP)");
+  const mtpExplain = el("i");
+  const parallelExplain = el("i", {}, "0 = fit to the cards");
   const section2 = card({ num: 2, title: "Run", hint: "context and engine" }, el("div", { class: "fields" },
     field("Context", input({ name: "context", class: "mono", list: "dl-contexts", value: cfg.context }), ctxExplain),
     el("label", { class: "f" }, el("b", {}, "KV format"), select("kv", cfg.kv, [["int8", "int8 (default)"], ["k8v4", "k8v4 (23 % less than int8)"], ["q4_0", "q4_0 (about half of int8)"], ["fp16", "fp16 (twice int8)"]]), kvExplain),
-    field("Pictures (vision)", select("vision", cfg.vision, [["off", "off"], ["on", "on"], ["gpu", "on, reader on the card"], ["cpu", "on, reader on the CPU"]])),
-    field("Draft layer (MTP)", select("mtp", cfg.mtp, [["", "Strata's choice"], ["on", "on"], ["off", "off (saves about 1 GB VRAM, slower)"]])),
-    field("Parallel requests", input({ name: "parallel", class: "mono", type: "number", min: 0, max: 8, value: cfg.parallel }), "0 = fit to the cards")));
+    el("label", { class: "f" }, el("b", {}, "Pictures (vision)"), select("vision", cfg.vision, [["off", "off"], ["on", "on"], ["gpu", "on, reader on the card"], ["cpu", "on, reader on the CPU"]]), visionExplain),
+    el("label", { class: "f" }, mtpLabel, select("mtp", cfg.mtp, [["", "Strata's choice"], ["on", "on"], ["off", "off (saves about 1 GB VRAM, slower)"]]), mtpExplain),
+    el("label", { class: "f" }, el("b", {}, "Parallel requests"), input({ name: "parallel", class: "mono", type: "number", min: 0, max: 8, value: cfg.parallel }), parallelExplain)));
 
   // 3. Cards
   const quick = el("div");
   const gpuTiles = el("div", { class: "tiles" });
-  const cardsNote = el("div", { class: "banner note hidden" },
-    "This model runs on one card only, the main one. The other cards stay off; as helpers they would take the main card's place, because its engine uses the first card it sees.");
-  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, cardsNote, quick, gpuTiles,
+  const cardsNote = el("div", { class: "banner note hidden" });
+  // Temporary (known_problems.py, IMPLEMENTATION.md section 15): remove once Strata fixes it or it is shown not to be a bug.
+  const inklingCardsWarn = el("div", { class: "banner warn hidden" },
+    "Inkling-2-Mini with two NVIDIA cards may fail during Strata's setup (Strata 0.2.19). There may be a bug in Strata here. If loading fails, set one card to Off.");
+  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, cardsNote, inklingCardsWarn, quick, gpuTiles,
     el("div", { class: "hint" }, status && status.gpus.length
       ? "Exactly one card is main. The numbers are the ones --gpu-roles expects; engine logs (CUDA0, CUDA1) and plan texts (GPU 1, GPU 2) count differently."
       : "No cards found. Strata chooses."));
@@ -648,9 +683,9 @@ function settingsForm(body, name, entry) {
   const reserveFirstExplain = el("i");
   const reserveLaterExplain = el("i");
   // Qwen3.6 (an engine path of its own) has no RAM modes: the engine places the experts itself.
-  const ownRamNote = el("div", { class: "banner note hidden" },
-    "This model runs on Strata's own engine path: it keeps every expert it can on the main card, and when not all fit, a copy of every expert in RAM. "
-    + "There are no RAM modes and no VRAM reserve. To leave VRAM free for other programs, set expert-vram=GiB (the experts' share of the card) under Advanced.");
+  const OWN_RAM_TEXT = "This model runs on Strata's own engine path: it keeps every expert it can on the main card, and when not all fit, a copy of every expert in RAM. "
+    + "There are no RAM modes and no VRAM reserve. To leave VRAM free for other programs, set expert-vram=GiB (the experts' share of the card) under Advanced.";
+  const ownRamNote = el("div", { class: "banner note hidden" }, OWN_RAM_TEXT);
   const budgetMax = limits.ram_bytes ? Math.floor((limits.ram_bytes + (limits.swap_bytes || 0)) / GIB) : 4096;
   const budgetDefault = cfg.ram_budget_gib || (limits.ram_bytes ? Math.max(1, Math.floor(limits.ram_bytes / GIB)) : 28);
   const budgetInput = input({ type: "number", name: "ram_budget_gib", class: "budget", min: 1, max: budgetMax, value: budgetDefault });
@@ -685,7 +720,7 @@ function settingsForm(body, name, entry) {
   if (entry) {
     body.append(el("div", { class: "danger-zone" }, el("div", { class: "grow" }, el("strong", {}, "Delete these settings"),
       el("div", { class: "hint" }, "Removes only the settings file. The model files in /data stay.")),
-      el("button", { class: "danger", disabled: status && status.model.active === name, onclick: remove }, "Delete")));
+      el("button", { class: "danger", disabled: status && status.model.active === name, onclick: () => deleteConfig(name) }, "Delete")));
   }
   const f = form.elements;
 
@@ -702,7 +737,7 @@ function settingsForm(body, name, entry) {
     [pathInput, (v, saving) => saving && source === "gguf" && !v ? "Choose the folder with your GGUF files." : ""],
     [modelInput, (v, saving) => saving && !v ? (source === "gguf" ? "Choose which of Strata's versions these files are." : "Choose a model.") : ""],
     [f.context, (v) => CONTEXT_RE.test(v) ? "" : "A context size such as 32k, 128k, 1m or a number of tokens."],
-    [f.parallel, (v) => v === "" || whole(v, 0, 8) ? "" : "0 (fit to the cards) or 1 to 8."],
+    [f.parallel, (v) => { const top = maxParallel(); return v === "" || whole(v, 0, top) ? "" : top === 1 ? "0 or 1: this model answers one request at a time." : `0 (fit to the cards) or 1 to ${top}.`; }],
     [f.vram_reserve_mib, (v) => v === "" || whole(v, 0, 262144) ? "" : "Empty or a whole number of MiB, 0 to 262144."],
     [f.vram_reserve_later_mib, (v) => v === "" || whole(v, 0, 262144) ? "" : "Empty or a whole number of MiB, 0 to 262144."],
     [budgetInput, (v) => whole(v, 1, budgetMax) ? "" : `1 to ${budgetMax} GiB, the RAM plus swap this container has.`],
@@ -905,19 +940,53 @@ function settingsForm(body, name, entry) {
     updateEstimates();
   }
 
-  /** Qwen3.6 and other own-path families: one card, no KV format, RAM modes or VRAM reserve. Runs when the version changes. */
+  /** The most parallel requests the chosen version takes: 1 for Hy4-Flash, 64 for Inkling-2-Mini, else 8. */
+  function maxParallel() {
+    return native ? NATIVE_PARALLEL[native] || 8 : 8;
+  }
+
+  /**
+   * Qwen3.6 and other own-path families: one card, no KV format, RAM modes or VRAM reserve. Hy4-Flash and Inkling-2-Mini
+   * (native): the same, plus pictures only on or off, the drafter built into the model file, their own parallel limit.
+   * Inkling-2-Mini uses two NVIDIA cards together, so it keeps helpers on CUDA. Runs when the version changes.
+   */
   function syncOwnPath() {
-    const own = isOwnPath(catalogRow({ model: modelInput.value.trim(), family: familyInput.value.trim() }));
-    if (own === ownMode) return;
-    ownMode = own;
+    const row = catalogRow({ model: modelInput.value.trim(), family: familyInput.value.trim() });
+    const kind = nativeKind(row);
+    const own = isOwnPath(row) || Boolean(kind);
+    const single = own && !(kind === "inkling" && status && status.checks.backend === "cuda");
+    const key = `${own}|${kind}|${single}`;
+    if (key === `${ownMode}|${native}|${oneCard}`) return;
+    ownMode = own; native = kind; oneCard = single;
     f.kv.disabled = own;
     kvExplain.textContent = own ? "not used: this model's engine keeps its own cache format" : "";
     for (const n of [f.vram_reserve_mib, f.vram_reserve_later_mib]) n.disabled = own;
     reserveFirstExplain.textContent = own ? "not used by this model" : "first card in Strata's order · empty = Strata's default";
     reserveLaterExplain.textContent = own ? "not used by this model" : "later cards · empty = Strata's default";
     ramTiles.classList.toggle("hidden", own);
+    ownRamNote.textContent = kind
+      ? "This model runs on its own engine program with its own .strata files. It places the experts itself: on the card, in RAM, and what does not fit is read from the SSD. "
+        + "There are no RAM modes and no VRAM reserve. The memory figures on the model page are Strata's own."
+      : OWN_RAM_TEXT;
     ownRamNote.classList.toggle("hidden", !own);
-    if (own) for (const k of Object.keys(roles)) if (roles[k] === "helper") roles[k] = "off";
+    // Pictures: the native engines read them with their own reader, so only on or off.
+    for (const o of f.vision.options) if (o.value === "gpu" || o.value === "cpu") o.disabled = Boolean(kind);
+    if (kind && (f.vision.value === "gpu" || f.vision.value === "cpu")) f.vision.value = "on";
+    visionExplain.textContent = kind ? "on downloads the picture reader file with the model" : "";
+    // The drafter is part of the model file (DFly2 for Hy4-Flash, DSpark for Inkling-2-Mini): on by default, or off.
+    mtpLabel.textContent = kind ? "Drafter" : "Draft layer (MTP)";
+    const mtpText = { "": kind ? "on (built into the model file)" : "Strata's choice", on: "on", off: kind ? "off" : "off (saves about 1 GB VRAM, slower)" };
+    for (const o of f.mtp.options) { o.textContent = mtpText[o.value]; if (o.value === "on") o.hidden = o.disabled = Boolean(kind); }
+    if (kind && f.mtp.value === "on") f.mtp.value = "";
+    mtpExplain.textContent = kind ? (kind === "hy4" ? "DFly2, built into the model file" : "DSpark, built into the model file") : "";
+    const top = maxParallel();
+    f.parallel.max = top;
+    parallelExplain.textContent = top === 1 ? "this model answers one request at a time" : `0 = fit to the cards · up to ${top}`;
+    check(f.parallel);
+    // The contexts Strata offers for this model (Hy4-Flash up to 128K, Inkling-2-Mini up to 256K).
+    const list = row && Array.isArray(row.contexts) && row.contexts.length ? row.contexts : cat.contexts;
+    if (list.length) lists[0].replaceChildren(...list.map((t) => el("option", { value: t % 1024 === 0 ? t / 1024 + "k" : String(t) })));
+    if (single) for (const k of Object.keys(roles)) if (roles[k] === "helper") roles[k] = "off";
     renderCards();
   }
 
@@ -982,7 +1051,7 @@ function settingsForm(body, name, entry) {
     const gpus = status ? status.gpus : [];
     const current = rolesText();
     const options = gpus.map((g) => [`only-${g.index}`, `Only ${g.index}`, g.name]);
-    if (gpus.length > 1 && !ownMode) options.push(["split", "Split over all cards"]);
+    if (gpus.length > 1 && !oneCard) options.push(["split", native === "inkling" ? "Both cards together" : "Split over all cards"]);
     const onlyText = (i) => gpus.map((x) => `${x.index}=${x.index === i ? "main" : "off"}`).join(",");
     const chosenQuick = gpus.length > 1 && current === defaultRoles() ? "split"
       : (gpus.find((g) => current === onlyText(g.index)) ? `only-${gpus.find((g) => current === onlyText(g.index)).index}` : "");
@@ -996,17 +1065,25 @@ function settingsForm(body, name, entry) {
       return el("div", { class: "tile" + (role !== "off" ? " on" : "") },
         el("div", { class: "h" }, el("span", { class: "idx" }, String(g.index)), el("span", {}, g.name)),
         el("div", { class: "hint" }, g.vram_total_mib ? `${(g.vram_total_mib / 1024).toFixed(0)} GiB VRAM` : "VRAM unknown"),
-        el("div", { class: "roles" }, ...["main", "helper", "off"].map((r) => ownMode && r === "helper"
+        el("div", { class: "roles" }, ...["main", "helper", "off"].map((r) => oneCard && r === "helper"
           ? el("a", { class: "chip disabled", title: "This model runs on the main card only." }, r)
           : el("a", { class: "chip" + (r === role ? " on" : ""), role: "button", onclick: () => setRole(g.index, r) }, r))));
     }));
-    cardsNote.classList.toggle("hidden", !ownMode || gpus.length < 2);
+    cardsNote.textContent = !native
+      ? "This model runs on one card only, the main one. The other cards stay off; as helpers they would take the main card's place, because its engine uses the first card it sees."
+      : native === "inkling"
+        ? "On this engine backend Inkling-2-Mini runs on one card only, the main one. Strata uses two cards together only with NVIDIA cards."
+        : "This model runs on one card only, the main one. Strata's setup uses no other card for it.";
+    cardsNote.classList.toggle("hidden", !oneCard || gpus.length < 2);
+    // Temporary Strata workaround (known_problems.py): Inkling-2-Mini on two NVIDIA cards.
+    const inUse = gpus.filter((g) => (roles[g.index] || "off") !== "off").length;
+    inklingCardsWarn.classList.toggle("hidden", !(native === "inkling" && !oneCard && inUse >= 2));
     updateReserveLabels();
     updateEstimates();
   }
 
   function setRole(index, role) {
-    if (role === "main") for (const k of Object.keys(roles)) if (roles[k] === "main") roles[k] = ownMode ? "off" : "helper";
+    if (role === "main") for (const k of Object.keys(roles)) if (roles[k] === "main") roles[k] = oneCard ? "off" : "helper";
     roles[index] = role;
     renderCards();
   }
@@ -1060,7 +1137,9 @@ function settingsForm(body, name, entry) {
     const mode = form.querySelector("input[name=ram_mode]:checked");
     return {
       model: modelInput.value.trim(), family: familyInput.value.trim(), model_path: source === "gguf" ? pathInput.value.trim() : "",
-      context: f.context.value.trim(), kv: f.kv.value, vision: f.vision.value, mtp: f.mtp.value,
+      context: f.context.value.trim(), kv: f.kv.value,
+      vision: native && (f.vision.value === "gpu" || f.vision.value === "cpu") ? "on" : f.vision.value,
+      mtp: native && f.mtp.value === "on" ? "" : f.mtp.value,
       parallel: Number(f.parallel.value || 0), gpu_roles: status && status.gpus.length ? rolesText() : "",
       ram_mode: mode && !ownMode ? mode.value : "normal",
       ram_budget_gib: mode && !ownMode && mode.value === "budget" ? Number(budgetInput.value || 0) : 0,
@@ -1105,8 +1184,6 @@ function settingsForm(body, name, entry) {
     } catch (e) { showError(e); }
     finally { planBtn.disabled = false; }
   }
-
-  const remove = () => deleteConfig(name);
 
   form.addEventListener("submit", save);
   nameInput.addEventListener("input", () => { autoName = ""; });
@@ -1202,9 +1279,25 @@ function ownPathEstimate(cfg, row, experts) {
     cardCacheGib: sessions * cacheGib, total: () => inRam + EST.baseGib };
 }
 
+/**
+ * Hy4-Flash and Inkling-2-Mini: Strata's own placement for this computer (strata_mcp.py, model_table: hy4_fit.place and
+ * inkling_fit.place), at the family's default context and with pictures on. It does not follow this form's cards or
+ * context: the rules have many cases (unified memory, rank cuts, the engine's own plan beyond 20K), so they are not
+ * copied here. null when Strata gave no placement (it needs to know the RAM).
+ */
+function nativeEstimate(row) {
+  const fit = row.native_fit || {};
+  const p = fit.placement;
+  if (!p || typeof p.vram_gb !== "number") return null;
+  const n = typeof fit.context === "number" ? fit.context : null;
+  return { native: row.native, onCards: p.vram_gb / GB_PER_GIB, inRam: (p.ram_gb || 0) / GB_PER_GIB, ssd: (p.ssd_gb || 0) / GB_PER_GIB,
+    mode: fit.mode || "", contextText: n ? (n % 1024 === 0 ? `${n / 1024}K` : String(n)) : "its default" };
+}
+
 /** Where the experts of these settings would go, in GiB. null when the version is not in Strata's list. */
 function memoryEstimate(cfg) {
   const row = catalogRow(cfg);
+  if (nativeKind(row)) return nativeEstimate(row);
   let experts = null;
   if (row && typeof row.experts_gb === "number" && row.experts_gb > 0) experts = row.experts_gb;
   else if (row && typeof row.memory_gb === "number" && row.memory_gb > 1) experts = row.memory_gb - 1;
@@ -1250,6 +1343,13 @@ function fitOf(cfg) {
   if (!est) return null;
   const ram = limits.ram_bytes / GIB, swap = (limits.swap_bytes || 0) / GIB;
   const where = `${limits.ram_from === "container" ? "container limit" : "host, no container limit"}`;
+  if (est.native) {
+    // Strata's verdict (hy4_fit.mode / inkling_fit.mode): nothing, a little or much read from the SSD.
+    const text = `Strata's placement at ${est.contextText}: ${gib(est.onCards)} of experts on the card, ${gib(est.inRam)} in RAM, `
+      + `${gib(est.ssd)} read from the SSD; RAM ${gib(ram)} (${where}).`;
+    if (est.inRam > ram) return { level: "slow", label: "SSD reads", text: text + " Strata counted more RAM than this container has, so more is read from the SSD." };
+    return est.mode === "cross_tier_ssd" ? { level: "slow", label: "SSD reads", text } : { level: "ok", label: "fits", text };
+  }
   if (est.ownPath) {
     // No SSD mode on this engine path: the experts that no card holds must fit in RAM (page-locked, swap does not help).
     const inRam = est.ramExperts.normal;
@@ -1270,7 +1370,7 @@ function fitOf(cfg) {
 /** Badge text per RAM mode for the form's tiles. */
 function ramEstimates(cfg) {
   const est = memoryEstimate(cfg);
-  if (!est) return null;
+  if (!est || est.native) return null;  // the native families have no RAM modes
   const out = {};
   for (const m of RAM_MODES) out[m.id] = m.id === "mmap-experts" ? `≈ ${gib(est.total(m.id))} RAM + file cache` : `≈ ${gib(est.total(m.id))} RAM`;
   return out;
@@ -1307,7 +1407,14 @@ function modelFilesPage() {
   function usesEntry(cfg, entry, list) {
     if (list === "own") return cfg.model_path === entry.path;
     const row = catalogRow(cfg);
-    return !cfg.model_path && row && String(row.folder || "").toLowerCase() === entry.name.toLowerCase();
+    if (cfg.model_path || !row) return false;
+    if (nativeKind(row) && Array.isArray(row.files)) {
+      // One folder per family, listed file by file ("hy4-flash/Hy4-Flash-SQ-64.strata"); Hy4-Flash's Engram file is shared.
+      const [folder, file] = entry.name.split("/");
+      return folder && file && folder.toLowerCase() === String(row.folder || "").toLowerCase()
+        && row.files.some((x) => x.name === file && (cfg.vision !== "off" || !/vision/i.test(x.name)));
+    }
+    return String(row.folder || "").toLowerCase() === entry.name.toLowerCase();
   }
 
   function rows(entries, list, emptyText) {

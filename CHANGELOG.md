@@ -3,6 +3,21 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.4] - 2026-11-22
+
+Built on Strata `0.2.19`.
+
+- Added support for Tencent Hy4-Flash and Inkling-2-Mini models, which use their own engine programs and file structures.
+- Hy4-Flash and Inkling-2-Mini now show specific memory placement details (VRAM, RAM, and SSD usage) provided by Strata.
+- For Hy4-Flash and Inkling-2-Mini, the "KV format," "RAM mode," and "VRAM reserve" settings are hidden as they are not used by these engines.
+- The "Pictures" setting for Hy4-Flash and Inkling-2-Mini is limited to "on" or "off," as these models use their own image readers.
+- The "Draft layer" setting for Hy4-Flash and Inkling-2-Mini is renamed to "Drafter" and limited to "on" or "off," reflecting the built-in drafting mechanism.
+- Parallel request limits are now model-specific: Hy4-Flash allows 1 request, Inkling-2-Mini allows up to 64, and other models remain at 8.
+- A warning is displayed when configuring Inkling-2-Mini to use two NVIDIA cards, noting a potential bug in Strata 0.2.19 that may cause setup failures.
+- The model files page now lists individual files for Hy4-Flash and Inkling-2-Mini folders, allowing for more granular management of shared and specific model components.
+- Download progress for Hy4-Flash and Inkling-2-Mini now accurately reflects only the files required for the selected configuration, excluding unused components.
+- If a model launch fails due to a known Strata issue, a plain-English explanation of the problem is now displayed in the UI.
+
 ## [v1.0.3] - 2026-11-20
 
 Built on Strata `0.2.17`.

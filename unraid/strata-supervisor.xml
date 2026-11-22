@@ -22,7 +22,20 @@ Pick the image for your card when you install: the default tag is for NVIDIA RTX
 The web UI has no login: keep it on your LAN and set "Allowed host names".&#xD;
 &#xD;
 Unofficial private project, not affiliated with the Strata project.</Overview>
-  <Changes>### v1.0.3&#xD;
+  <Changes>### v1.0.4&#xD;
+- Added support for Tencent Hy4-Flash and Inkling-2-Mini models, which use their own engine programs and file structures.&#xD;
+- Hy4-Flash and Inkling-2-Mini now show specific memory placement details (VRAM, RAM, and SSD usage) provided by Strata.&#xD;
+- For Hy4-Flash and Inkling-2-Mini, the "KV format," "RAM mode," and "VRAM reserve" settings are hidden as they are not used by these engines.&#xD;
+- The "Pictures" setting for Hy4-Flash and Inkling-2-Mini is limited to "on" or "off," as these models use their own image readers.&#xD;
+- The "Draft layer" setting for Hy4-Flash and Inkling-2-Mini is renamed to "Drafter" and limited to "on" or "off," reflecting the built-in drafting mechanism.&#xD;
+- Parallel request limits are now model-specific: Hy4-Flash allows 1 request, Inkling-2-Mini allows up to 64, and other models remain at 8.&#xD;
+- A warning is displayed when configuring Inkling-2-Mini to use two NVIDIA cards, noting a potential bug in Strata 0.2.19 that may cause setup failures.&#xD;
+- The model files page now lists individual files for Hy4-Flash and Inkling-2-Mini folders, allowing for more granular management of shared and specific model components.&#xD;
+- Download progress for Hy4-Flash and Inkling-2-Mini now accurately reflects only the files required for the selected configuration, excluding unused components.&#xD;
+- If a model launch fails due to a known Strata issue, a plain-English explanation of the problem is now displayed in the UI.&#xD;
+- Built on Strata 0.2.19.&#xD;
+&#xD;
+### v1.0.3&#xD;
 - Added support for the Qwen3.6-35B-A3B model, which runs on a dedicated engine path using only the main GPU.&#xD;
 - When configuring Qwen3.6-35B-A3B, the KV format, RAM mode, and VRAM reserve settings are disabled as they are not used by this model.&#xD;
 - The "Split over all cards" option is hidden for Qwen3.6-35B-A3B, and helper roles are disabled since the model runs on a single card.&#xD;

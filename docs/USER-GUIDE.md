@@ -164,6 +164,26 @@ work differently for it, and the form adapts when you pick it:
 - Context, pictures, draft layer and parallel requests work as usual. Each request slot keeps its own context
   cache on the card (about 1.4 GiB per 32K), so more parallel requests leave less room for the experts.
 
+### Tencent Hy4-Flash and Inkling-2-Mini
+
+Strata runs these two models on engine programs of their own, with their own model files (`.strata`, not GGUF).
+The form adapts when you pick one:
+
+- **No KV format, no RAM modes, no VRAM reserve.** The engine places the experts itself: on the card, in RAM, and
+  what does not fit is read from the SSD while the model answers (much slower). The model page shows where Strata
+  places them on your computer, and the fit marker says "SSD reads" when a lot comes from the SSD.
+- **Pictures** are on or off. **Drafter**: built into the model file and on by default; set it to off if you want.
+- **Hy4-Flash** (`SQ-64`, `SQ-96`, `SQ-128`) is very large: the smallest build is a 62 GB download, and every build
+  also needs the 68 GB Engram file, which the engine reads from the SSD all the time (it needs a fast SSD). It runs
+  on one card and answers one request at a time. SQ-64 is meant for 64 GB of RAM; with less, most of it comes from
+  the SSD.
+- **Inkling-2-Mini** (`SQ-10`, `SQ-15`, `SQ-20`, 10 to 19 GB) fits on one 24 GB card. Up to 64 parallel requests.
+  With two NVIDIA cards Strata uses both together. Strata 0.2.19 may fail while setting it up on two NVIDIA cards
+  (there may be a bug in Strata there); the form warns about it. If loading fails, set one card to off.
+- All builds of one model are in one folder (`/data/Strata-data/models/hy4-flash` or `.../inkling-2-mini`). The
+  Models page lists its files one by one, so you can delete one build. Hy4-Flash's Engram file is shared by all
+  its builds: delete it only when you remove the last one.
+
 ## 7. Loading, unloading, switching
 
 - **Load** (▶): starts the model. Only possible while no other model is loaded.
