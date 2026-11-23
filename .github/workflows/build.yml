@@ -177,6 +177,10 @@ jobs:
           for f in app.js style.css logo.svg; do
             curl -sf -o /dev/null "http://localhost:8081/$f" || { echo "::error::$f not served"; ok=0; }
           done
+          # CHANGELOG.md must be in the image: the changelog dialog reads it from there.
+          curl -sf http://localhost:8081/api/changelog \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["entries"], d' \
+            || { echo "::error::CHANGELOG.md missing in the image"; ok=0; }
           # No GPU on the runner: the start checks must fail cleanly and block loading.
           curl -sf http://localhost:8081/api/status \
             | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["checks"]["errors"] and not s["checks"]["can_load"], s["checks"]' \

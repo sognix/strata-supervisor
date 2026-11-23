@@ -3,9 +3,10 @@
 Strata's downloads live in /data/Strata-data/models/<folder> (one folder per version, plus loose files such as the
 picture reader's mmproj), its prepared data for a version in /data/Strata-data/packs/<folder in lower case>
 (strata_control/models_move.py: "models/<tag>", "packs/<tag>"). Deleting a Strata model removes both; the shared
-draft layer (mtp) stays. Families with .strata files of their own (Hy4-Flash, Inkling-2-Mini, Strata 0.2.18 and
-later) keep every build in one folder, models/<family>, and Hy4-Flash's builds share one Engram file there, so such a
-folder is listed file by file: one build can go while the others and the shared file stay.
+draft layer (mtp) stays. Families with an engine program of their own (Hy4-Flash, Inkling-2-Mini, Strata 0.2.18 and
+later) keep every build in one folder, models/<family>, and builds share files there (Hy4-Flash's Engram file, the
+picture reader, Inkling-2-Mini's DSpark drafter for its GGUF builds, Strata 0.2.20), so such a folder is listed file by
+file: one build can go while the others and the shared files stay.
 Own GGUF files are the folders in /models. Strata has no delete command, so this module deletes, but only an entry
 it listed itself, never a path from outside, and never while a model runs.
 """
@@ -15,6 +16,8 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
+
+from .model_config import NATIVE_FAMILIES
 
 
 class FileError(ValueError):
@@ -56,8 +59,11 @@ def files_bytes(folder: Path, names: list[str]) -> int:
 
 
 def _holds_strata_files(path: Path) -> bool:
-    """A folder of a family with .strata files of its own: listed file by file."""
-    return path.is_dir() and not path.is_symlink() and any(p.suffix == ".strata" for p in _children(path))
+    """A folder of a family with an engine program of its own: listed file by file. Found by its name (models/<family>)
+    or by a .strata file in it; Inkling-2-Mini's GGUF builds with pictures off leave only .gguf files there."""
+    if not path.is_dir() or path.is_symlink():
+        return False
+    return path.name.lower() in NATIVE_FAMILIES or any(p.suffix == ".strata" for p in _children(path))
 
 
 def _entry(path: Path, kind: str) -> dict:

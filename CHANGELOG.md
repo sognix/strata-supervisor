@@ -3,6 +3,16 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.5] - 2026-11-23
+
+Built on Strata `0.2.20`.
+
+- Added a changelog dialog that shows what changed in the current release; it appears automatically after an update and can be opened anytime by clicking the Supervisor version in the sidebar.
+- Updated the card selection warning for Hy4-Flash and Inkling-2-Mini to reflect the new multi-card limits (up to 4 cards for Hy4-Flash, up to 4 for Inkling-2-Mini on CUDA, and up to 2 for Inkling-2-Mini on other backends).
+- Removed the temporary warning about a potential bug with Inkling-2-Mini on two NVIDIA cards, as it is no longer relevant in the updated Strata version.
+- Updated the model file listing logic to correctly identify and manage shared files for native models, including the new DSpark drafter file for Inkling-2-Mini GGUF builds.
+- Added links in the sidebar to the Strata GitHub repository and its specific release notes.
+
 ## [v1.0.4] - 2026-11-22
 
 Built on Strata `0.2.19`.

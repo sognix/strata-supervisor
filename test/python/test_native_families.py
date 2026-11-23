@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "app" / "backend"))
 
-from strata_webui.strata import catalog, known_problems, model_files  # noqa: E402
+from strata_webui.strata import catalog, model_files  # noqa: E402
 from strata_webui.strata import model_config as mc  # noqa: E402
 
 ROOTS = (Path("/data"),)
@@ -91,6 +91,17 @@ class NativeFilesTest(unittest.TestCase):
         names = ["Hy4-Flash-SQ-96.strata", "Hy4-Flash-Engram-Q8.strata"]
         self.assertEqual(model_files.files_bytes(self.hy4, names), 9 + 30)
 
+    def test_gguf_build_without_strata_file(self) -> None:
+        # Inkling-2-Mini's GGUF builds (Strata 0.2.20) with pictures off leave only .gguf files in models/<family>
+        ink = self.data / "models" / "inkling-2-mini"
+        ink.mkdir()
+        (ink / "Inkling-2-Mini-UD-IQ1_S.gguf").write_bytes(b"i" * 7)
+        (ink / "dspark-Inkling-2-Mini-Q8_0.gguf").write_bytes(b"d" * 2)
+        names = [e["name"] for e in model_files.listing(self.data, self.own)["strata"]]
+        self.assertIn("inkling-2-mini/Inkling-2-Mini-UD-IQ1_S.gguf", names)
+        self.assertIn("inkling-2-mini/dspark-Inkling-2-Mini-Q8_0.gguf", names)
+        self.assertNotIn("inkling-2-mini", names)
+
 
 # A stand-in for Strata's Terminal: just the parts the catalog probe reads, shaped like Strata 0.2.19
 # (strata_cli/launch/catalog.py, tools/strata_mcp.py model_table and own_families, strata_control/hy4_family.py).
@@ -151,28 +162,6 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(rows["qwen36"]["folder"], "qwen36-UD-Q4_K_XL")
         self.assertEqual(rows["qwen"]["folder"], "Q2_0")
         self.assertIsNone(rows["qwen"]["files"])
-
-
-class InklingTwoCardsTest(unittest.TestCase):
-    ERROR = ["Traceback (most recent call last):", "AttributeError: 'int' object has no attribute 'get'",
-             "[strata launch ended with exit code 1]"]
-
-    def test_explained_for_two_cards(self) -> None:
-        c = cfg(model="SQ-20", family="inkling-2-mini", gpu_roles="0=main,1=helper")
-        self.assertIn("may be a bug in Strata", known_problems.launch_problem(c, self.ERROR))
-
-    def test_explained_when_strata_chooses_the_cards(self) -> None:
-        c = cfg(model="SQ-20", family="inkling-2-mini")
-        self.assertIsNotNone(known_problems.launch_problem(c, self.ERROR))
-
-    def test_not_for_one_card_other_families_or_other_errors(self) -> None:
-        one = cfg(model="SQ-20", family="inkling-2-mini", gpu_roles="0=main,1=off")
-        self.assertIsNone(known_problems.launch_problem(one, self.ERROR))
-        other = cfg(model="SQ-64", family="hy4-flash", gpu_roles="0=main,1=helper")
-        self.assertIsNone(known_problems.launch_problem(other, self.ERROR))
-        two = cfg(model="SQ-20", family="inkling-2-mini", gpu_roles="0=main,1=helper")
-        self.assertIsNone(known_problems.launch_problem(two, ["ValueError: something else"]))
-        self.assertIsNone(known_problems.launch_problem(None, self.ERROR))
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.title="Strata Supervisor" \
 
 # backend/ (Python) and frontend/ (the page) side by side, as in the repo. The license texts travel with the image.
 COPY app/ /opt/strata-supervisor/
-COPY LICENSE NOTICE.md /opt/strata-supervisor/
+COPY LICENSE NOTICE.md CHANGELOG.md /opt/strata-supervisor/
 
 # PUID/PGID own the files the supervisor creates in /config (Unraid default nobody:users).
 ENV PUID=99 \
