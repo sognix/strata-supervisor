@@ -185,3 +185,21 @@ textarea { min-height: 70px; }
 .empty { padding: 24px; text-align: center; color: var(--muted); }
 .error-text { color: var(--bad); }
 @media (max-width: 760px) { .logs.two { grid-template-columns: 1fr; } }
+
+/* changelog dialog (app.js, showChangelog) */
+dialog.changelog { width: min(720px, calc(100vw - 32px)); max-height: min(80vh, 900px); padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); display: flex; flex-direction: column; }
+dialog.changelog:not([open]) { display: none; }
+dialog.changelog::backdrop { background: rgba(0, 0, 0, .45); }
+.cl-head, .cl-foot { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--panel); }
+.cl-head { border-bottom: 1px solid var(--line); }
+.cl-head h2 { font-size: 16px; margin: 0; flex: 1; }
+.cl-foot { border-top: 1px solid var(--line); justify-content: flex-end; }
+.cl-body { overflow: auto; padding: 4px 18px 14px; }
+.cl-entry + .cl-entry { border-top: 1px solid var(--line); }
+.cl-entry h3 { font-size: 14px; margin: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+.cl-entry h3 .muted { font-weight: 400; }
+.cl-entry p { margin: 6px 0; }
+.cl-entry ul { margin: 6px 0; padding-left: 20px; }
+.cl-entry li { margin: 3px 0; }
+.versions a { color: inherit; text-decoration: underline dotted; }
+.versions a:hover { color: var(--accent); }

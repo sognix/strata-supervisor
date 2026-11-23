@@ -106,7 +106,7 @@ and `dev-<flavor>` follow the main branch and are for testing.
 | Path | Content |
 | --- | --- |
 | `/data` | Strata's models, prepared data, state and the API key. Needs lots of room |
-| `/config` | One TOML file per model config in `models/` |
+| `/config` | One TOML file per model config in `models/`, and `last-seen-version` (the changelog popup after an update) |
 | `/models` | Optional: your own GGUF files, one sub-folder per model. Writable if the Models page should be able to delete there |
 
 `docker stop` must finish within Unraid's "Docker Stop Timeout" (10 s by default). The supervisor stops
@@ -154,9 +154,9 @@ To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
   (`STRATA_VERSION`).
 - Qwen3.6-35B-A3B runs on one card only (Strata's own engine path for it); the form sets the other
   cards to off. Tested locally on an RX 7900 XTX only.
-- Tencent Hy4-Flash and Inkling-2-Mini (Strata 0.2.18 and 0.2.19) run on engines of their own. Hy4-Flash
-  uses one card; Inkling-2-Mini can use two NVIDIA cards, but Strata 0.2.19 may fail to set it up that way
-  (there may be a bug in Strata there). Not tested on real cards yet.
+- Tencent Hy4-Flash and Inkling-2-Mini (Strata 0.2.18 and 0.2.19) run on engines of their own. Since
+  Strata 0.2.20 both can use several cards: Hy4-Flash up to 4, Inkling-2-Mini up to 4 NVIDIA or 2 AMD cards.
+  Several cards are not tested yet.
 - Only one model is loaded at a time. Strata's "one model per card" mode is not supported.
 - Tuning (`--tune`) is not offered.
 

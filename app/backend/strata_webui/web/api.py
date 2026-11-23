@@ -10,15 +10,17 @@ from pathlib import Path
 from typing import Callable
 
 from ..core import commands, logbuf
+from ..core.ownership import Owner
 from ..host import memory
 from ..host.gpus import GpuSource
 from ..host.startup import Report
 from ..strata import catalog
 from ..strata.engine_report import memory_report
-from ..strata import known_problems, model_files, own_models
+from ..strata import model_files, own_models
 from ..strata import model_config as mc
 from ..strata.launcher import LaunchError, Launcher
 from ..strata.placeholder import Placeholder
+from . import changelog
 
 GIB = 1024 ** 3
 
@@ -63,6 +65,9 @@ class AppState:
     models_root: Path = Path("/models")           # "Own GGUF files" in the template, mounted read-only
     strata_models_dir: Path | None = None         # the models Strata downloaded itself, for their architectures
     runner: Callable[[list[str], float], tuple[int, str]] = commands.run_command
+    config_dir: Path | None = None                # /config: holds changelog.SEEN_FILE
+    owner: Owner = Owner(99, 100)                 # PUID/PGID for the files written to /config
+    changelog_path: Path = field(default_factory=changelog.default_path)
     unload_result: dict | None = None
     unload_error: str | None = None
     _status_cache: commands.Cached | None = field(default=None, repr=False)
@@ -93,16 +98,7 @@ class AppState:
         else:
             state.update(state="stopped", error=None, phase=None, exit_code=None)
         state["download"] = self._download_size(active) if active and state["launch_running"] else None
-        state["known_problem"] = self._known_problem(active) if active and not state["launch_running"] else None
         return state
-
-    def _known_problem(self, name: str) -> str | None:
-        """A plain explanation when the last launch of `name` failed on a known Strata problem (known_problems.py)."""
-        try:
-            cfg = self.store.load(name)
-        except mc.ConfigError:
-            return None
-        return known_problems.launch_problem(cfg, self.launcher.output(name))
 
     def _download_size(self, name: str) -> dict | None:
         """While a Strata model loads: how big its folder is now and how big the download is in all.
@@ -307,6 +303,25 @@ class AppState:
 
         threading.Thread(target=work, daemon=True).start()
         return {"unloading": self.launcher.active}
+
+    def changelog(self) -> dict:
+        """All sections of CHANGELOG.md, and the ones to show once after an update (changelog.py)."""
+        current = versions()["supervisor"]
+        try:
+            entries = changelog.parse(self.changelog_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            entries = []
+        seen = changelog.read_seen(self.config_dir) if self.config_dir else None
+        new = changelog.unseen(entries, current, seen) if self.config_dir else []
+        return {"current": current, "entries": entries, "unseen": [e["version"] for e in new]}
+
+    def changelog_seen(self) -> dict:
+        """The popup was closed: remember the current version, so it does not come back."""
+        current = versions()["supervisor"]
+        if not self.config_dir or not changelog.is_release(current):
+            return {"seen": None}
+        changelog.write_seen(self.config_dir, current, self.owner)
+        return {"seen": current}
 
     def api_key(self) -> dict:
         return {"api_key": self.report.api_key}

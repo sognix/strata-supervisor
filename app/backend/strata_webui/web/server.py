@@ -132,6 +132,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json(200, self.app.model_files())
             elif path == "/api/own-models":
                 self._send_json(200, self.app.own_models())
+            elif path == "/api/changelog":
+                self._send_json(200, self.app.changelog())
             elif path == "/api/logs":
                 self._send_json(200, self.app.logs())
             elif LOG_ROUTE.fullmatch(path):
@@ -172,6 +174,9 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/key":
                 self._send_json(200, app.api_key())
+                return
+            if path == "/api/changelog/seen":
+                self._send_json(200, app.changelog_seen())
                 return
             if path == "/api/model-files/delete":
                 self._send_json(200, app.delete_model_file(body))

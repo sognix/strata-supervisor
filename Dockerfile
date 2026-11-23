@@ -3,7 +3,7 @@
 # only here; CI builds every flavor from it (.github/workflows/build.yml, matrix "flavor").
 #   NVIDIA RTX (default): docker build -t strata-supervisor .
 #   AMD RX 7000:          docker build --build-arg STRATA_FLAVOR=rocm-gfx110x -t strata-supervisor:rocm .
-ARG STRATA_VERSION=0.2.19
+ARG STRATA_VERSION=0.2.20
 ARG STRATA_FLAVOR=cuda13
 FROM ghcr.io/niko1221/strata:${STRATA_VERSION}-${STRATA_FLAVOR}
 
@@ -23,7 +23,7 @@ LABEL org.opencontainers.image.title="Strata Supervisor" \
 
 # backend/ (Python) and frontend/ (the page) side by side, as in the repo. The license texts travel with the image.
 COPY app/ /opt/strata-supervisor/
-COPY LICENSE NOTICE.md /opt/strata-supervisor/
+COPY LICENSE NOTICE.md CHANGELOG.md /opt/strata-supervisor/
 
 # PUID/PGID own the files the supervisor creates in /config (Unraid default nobody:users).
 ENV PUID=99 \

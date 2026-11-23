@@ -71,6 +71,10 @@ Other Docker hosts: see the `docker run` example in the README.
 3. Note the **API key**: the "API key" button in the top bar shows it. Without `API_KEY` in the container
    settings, one is made on the first start and kept in `/data/state/api-key`. It stays the same for every
    model and every restart.
+4. At the bottom of the sidebar are the versions. A click on the **Supervisor version** shows the changelog of
+   this web UI. **Strata** links to Strata's GitHub page, the **Strata version** to that release's notes there.
+   After an update the web UI shows once what is new (in whichever browser opens it first); it remembers the
+   version it showed in `/config/last-seen-version`.
 
 ## 4. A model from Strata's list (download)
 
@@ -166,23 +170,28 @@ work differently for it, and the form adapts when you pick it:
 
 ### Tencent Hy4-Flash and Inkling-2-Mini
 
-Strata runs these two models on engine programs of their own, with their own model files (`.strata`, not GGUF).
+Strata runs these two models on engine programs of their own, with their own model files (`.strata`; Inkling-2-Mini
+also comes as GGUF builds since Strata 0.2.20).
 The form adapts when you pick one:
 
 - **No KV format, no RAM modes, no VRAM reserve.** The engine places the experts itself: on the card, in RAM, and
   what does not fit is read from the SSD while the model answers (much slower). The model page shows where Strata
   places them on your computer, and the fit marker says "SSD reads" when a lot comes from the SSD.
-- **Pictures** are on or off. **Drafter**: built into the model file and on by default; set it to off if you want.
+- **Pictures** are on or off. **Drafter**: on by default; set it to off if you want. It is built into the `.strata`
+  model file; Inkling-2-Mini's GGUF builds get it as a small extra file (`dspark-Inkling-2-Mini-Q8_0.gguf`, 0.4 GB).
+- **Cards:** both models can use several cards (Strata 0.2.20): Hy4-Flash up to 4, Inkling-2-Mini up to 4 NVIDIA
+  cards or 2 AMD cards. Strata leaves out the cards beyond that, and the main card could be one of them, so the form
+  warns when more cards are on.
 - **Hy4-Flash** (`SQ-64`, `SQ-96`, `SQ-128`) is very large: the smallest build is a 62 GB download, and every build
   also needs the 68 GB Engram file, which the engine reads from the SSD all the time (it needs a fast SSD). It runs
-  on one card and answers one request at a time. SQ-64 is meant for 64 GB of RAM; with less, most of it comes from
+  answers one request at a time. SQ-64 is meant for 64 GB of RAM; with less, most of it comes from
   the SSD.
-- **Inkling-2-Mini** (`SQ-10`, `SQ-15`, `SQ-20`, 10 to 19 GB) fits on one 24 GB card. Up to 64 parallel requests.
-  With two NVIDIA cards Strata uses both together. Strata 0.2.19 may fail while setting it up on two NVIDIA cards
-  (there may be a bug in Strata there); the form warns about it. If loading fails, set one card to off.
+- **Inkling-2-Mini** (`SQ-10`, `SQ-15`, `SQ-20`, 10 to 19 GB) fits on one 24 GB card. The GGUF builds by Unsloth
+  (`UD-IQ1_S` to `UD-Q8_K_XL`, about 8 to 23 GB) are the same model in GGUF form. Up to 64 parallel requests.
 - All builds of one model are in one folder (`/data/Strata-data/models/hy4-flash` or `.../inkling-2-mini`). The
-  Models page lists its files one by one, so you can delete one build. Hy4-Flash's Engram file is shared by all
-  its builds: delete it only when you remove the last one.
+  Models page lists its files one by one, so you can delete one build. Some files are shared by all builds:
+  Hy4-Flash's Engram file, the picture reader (`…-Vision.strata`) and Inkling-2-Mini's DSpark file. Delete them
+  only when you remove the last build that uses them.
 
 ## 7. Loading, unloading, switching
 

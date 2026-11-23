@@ -25,12 +25,16 @@ const KV_BYTES = { fp16: 2112, int8: 1056, q4_0: 576, k8v4: 816 };
 // more session (setup.py, OWN_PATH_FAMILIES "state_gb" 0.07 GB). Their cache size per token comes from the catalog.
 const OWN_PATH_STATE_GIB = 0.07e9 / GIB;
 const isOwnPath = (row) => Boolean(row && row.own_path);
-// Families with an engine program and .strata files of their own (Strata 0.2.18 and later): "hy4" (Tencent Hy4-Flash)
+// Families with an engine program and model files of their own (Strata 0.2.18 and later): "hy4" (Tencent Hy4-Flash)
 // and "inkling" (Inkling-2-Mini). No KV format, RAM modes, VRAM reserve or draft layer; the drafter is built into the
-// model file. Hy4-Flash runs on one card and one request at a time; Inkling-2-Mini serves up to 64 requests and uses two
-// NVIDIA cards together (setup.py, install_hy4_flash and install_inkling2, v0.2.19).
+// .strata model file, or for Inkling-2-Mini's GGUF builds (Strata 0.2.20) a DSpark file downloaded with them.
+// Hy4-Flash answers one request at a time, Inkling-2-Mini up to 64. Several cards (setup.py, install_hy4_flash and
+// install_inkling2, v0.2.20): Hy4-Flash up to 4 on every backend, Inkling-2-Mini up to 4 on CUDA and 2 elsewhere.
+// Strata keeps the first ones of helpers + main (main last), so more cards than that would cut the main card.
 const nativeKind = (row) => (row && row.native) || null;
 const NATIVE_PARALLEL = { hy4: 1, inkling: 64 };
+const nativeGguf = (row) => Boolean(row && Array.isArray(row.files) && row.files.some((x) => /\.gguf$/i.test(x.name)));
+const nativeCardLimit = (kind, backend) => (kind === "hy4" ? 4 : kind === "inkling" ? (backend === "cuda" ? 4 : 2) : Infinity);
 const GB_PER_GIB = GIB / 1e9;
 let idleVramUsed = {};  // VRAM other programs used on each card while no model was loaded (card index -> MiB)
 // Where Strata keeps the models it downloads itself (docs/USER-GUIDE.md, section 4).
@@ -235,7 +239,7 @@ function loadButton(name, withText) {
     onclick: (e) => { e.stopPropagation(); load(name); } }, icon("play"), withText ? "Load" : null);
 }
 
-// ---- Strata's prepared models, grouped like the desktop app (app/host/src/lib/native-catalog.ts, v0.2.19)
+// ---- Strata's prepared models, grouped like the desktop app (app/host/src/lib/native-catalog.ts, v0.2.20)
 
 const VERSION_LABELS = { Q2_0: "Fastest", IQ2_XS: "Compact", IQ3_XXS: "Balanced", IQ3_S: "High quality", IQ1_M: "Coding",
   "Gyro-S": "Smallest", "Gyro-M": "Small memory",
@@ -334,7 +338,6 @@ function renderShell() {
   if (status.placeholder.error && !m.active) add("error", status.placeholder.error);
   if (status.gpu_error) add("error", status.gpu_error);
   if (m.error && m.active) add("error", `Strata reports for ${m.active}: ${m.error}`);
-  if (m.known_problem && m.active) add("error", m.known_problem);  // known_problems.py: a Strata problem in plain words
   if (status.unload.error) add("error", status.unload.error);
   if (status.unload.result && status.unload.result.state !== "stopped")
     add("error", `Unload did not finish: the model is ${status.unload.result.state}. A new model can be loaded only after it is stopped.`);
@@ -456,7 +459,7 @@ function overviewTab(body, name, entry) {
     ["Model", titleOf(cfg, name)], ["Version", cfg.model ? mono([cfg.family, cfg.model].filter(Boolean).join(" ")) : "—"],
     ["Own model files", cfg.model_path ? mono(cfg.model_path) : "—"], ["Context", mono(cfg.context)],
     ["KV format", own ? unused.cloneNode(true) : mono(cfg.kv)], ["Pictures", cfg.vision],
-    native ? ["Drafter", cfg.mtp === "off" ? "off" : "on (built into the model file)"] : ["Draft layer", cfg.mtp || "Strata's choice"],
+    native ? ["Drafter", cfg.mtp === "off" ? "off" : nativeGguf(row) ? "on (DSpark file)" : "on (built into the model file)"] : ["Draft layer", cfg.mtp || "Strata's choice"],
     ["Parallel requests", cfg.parallel || "fit to the cards"], ["Cards", roleText()],
     ["RAM mode", own ? unused.cloneNode(true) : ramModeLabel(cfg)],
     ["VRAM reserve", own ? unused.cloneNode(true) : reserveText(cfg)], ["Advanced", cfg.extra_set.length ? mono(cfg.extra_set.join(" ")) : "—"],
@@ -618,6 +621,7 @@ function settingsForm(body, name, entry) {
   let autoName = "";  // the last suggested name; replaced on the next pick as long as nobody typed over it
   let ownMode = null; // the chosen version runs on an engine of its own: no KV format, RAM modes or VRAM reserve (syncOwnPath)
   let oneCard = false; // ... and on the main card only
+  let ownKey = null;   // what syncOwnPath last set up the form for
   let native = null;   // "hy4" or "inkling": a family with .strata files and an engine program of its own
 
   const input = (attrs) => el("input", { autocomplete: "off", ...attrs });
@@ -668,10 +672,8 @@ function settingsForm(body, name, entry) {
   const quick = el("div");
   const gpuTiles = el("div", { class: "tiles" });
   const cardsNote = el("div", { class: "banner note hidden" });
-  // Temporary (known_problems.py, IMPLEMENTATION.md section 15): remove once Strata fixes it or it is shown not to be a bug.
-  const inklingCardsWarn = el("div", { class: "banner warn hidden" },
-    "Inkling-2-Mini with two NVIDIA cards may fail during Strata's setup (Strata 0.2.19). There may be a bug in Strata here. If loading fails, set one card to Off.");
-  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, cardsNote, inklingCardsWarn, quick, gpuTiles,
+  const cardLimitWarn = el("div", { class: "banner warn hidden" });  // more cards on than Strata uses for this model
+  const section3 = card({ num: 3, title: "Cards", hint: "which GPU does what" }, cardsNote, cardLimitWarn, quick, gpuTiles,
     el("div", { class: "hint" }, status && status.gpus.length
       ? "Exactly one card is main. The numbers are the ones --gpu-roles expects; engine logs (CUDA0, CUDA1) and plan texts (GPU 1, GPU 2) count differently."
       : "No cards found. Strata chooses."));
@@ -947,17 +949,18 @@ function settingsForm(body, name, entry) {
 
   /**
    * Qwen3.6 and other own-path families: one card, no KV format, RAM modes or VRAM reserve. Hy4-Flash and Inkling-2-Mini
-   * (native): the same, plus pictures only on or off, the drafter built into the model file, their own parallel limit.
-   * Inkling-2-Mini uses two NVIDIA cards together, so it keeps helpers on CUDA. Runs when the version changes.
+   * (native): no KV format, RAM modes or VRAM reserve, pictures only on or off, the drafter on or off, their own parallel
+   * limit; they keep helper cards (Strata 0.2.20). Runs when the version changes.
    */
   function syncOwnPath() {
     const row = catalogRow({ model: modelInput.value.trim(), family: familyInput.value.trim() });
     const kind = nativeKind(row);
     const own = isOwnPath(row) || Boolean(kind);
-    const single = own && !(kind === "inkling" && status && status.checks.backend === "cuda");
-    const key = `${own}|${kind}|${single}`;
-    if (key === `${ownMode}|${native}|${oneCard}`) return;
-    ownMode = own; native = kind; oneCard = single;
+    const single = own && !kind;
+    const gguf = nativeGguf(row);
+    const key = `${own}|${kind}|${single}|${gguf}`;
+    if (key === ownKey) return;
+    ownKey = key; ownMode = own; native = kind; oneCard = single;
     f.kv.disabled = own;
     kvExplain.textContent = own ? "not used: this model's engine keeps its own cache format" : "";
     for (const n of [f.vram_reserve_mib, f.vram_reserve_later_mib]) n.disabled = own;
@@ -965,7 +968,7 @@ function settingsForm(body, name, entry) {
     reserveLaterExplain.textContent = own ? "not used by this model" : "later cards · empty = Strata's default";
     ramTiles.classList.toggle("hidden", own);
     ownRamNote.textContent = kind
-      ? "This model runs on its own engine program with its own .strata files. It places the experts itself: on the card, in RAM, and what does not fit is read from the SSD. "
+      ? "This model runs on its own engine program with its own model files. It places the experts itself: on the card, in RAM, and what does not fit is read from the SSD. "
         + "There are no RAM modes and no VRAM reserve. The memory figures on the model page are Strata's own."
       : OWN_RAM_TEXT;
     ownRamNote.classList.toggle("hidden", !own);
@@ -973,12 +976,14 @@ function settingsForm(body, name, entry) {
     for (const o of f.vision.options) if (o.value === "gpu" || o.value === "cpu") o.disabled = Boolean(kind);
     if (kind && (f.vision.value === "gpu" || f.vision.value === "cpu")) f.vision.value = "on";
     visionExplain.textContent = kind ? "on downloads the picture reader file with the model" : "";
-    // The drafter is part of the model file (DFly2 for Hy4-Flash, DSpark for Inkling-2-Mini): on by default, or off.
+    // The drafter (DFly2 for Hy4-Flash, DSpark for Inkling-2-Mini): in the .strata model file, or a DSpark file that
+    // comes with Inkling-2-Mini's GGUF builds. On by default, or off.
     mtpLabel.textContent = kind ? "Drafter" : "Draft layer (MTP)";
-    const mtpText = { "": kind ? "on (built into the model file)" : "Strata's choice", on: "on", off: kind ? "off" : "off (saves about 1 GB VRAM, slower)" };
+    const mtpText = { "": kind ? (gguf ? "on (DSpark file)" : "on (built into the model file)") : "Strata's choice", on: "on", off: kind ? "off" : "off (saves about 1 GB VRAM, slower)" };
     for (const o of f.mtp.options) { o.textContent = mtpText[o.value]; if (o.value === "on") o.hidden = o.disabled = Boolean(kind); }
     if (kind && f.mtp.value === "on") f.mtp.value = "";
-    mtpExplain.textContent = kind ? (kind === "hy4" ? "DFly2, built into the model file" : "DSpark, built into the model file") : "";
+    mtpExplain.textContent = !kind ? "" : kind === "hy4" ? "DFly2, built into the model file"
+      : gguf ? "DSpark, a small file Strata downloads with this build" : "DSpark, built into the model file";
     const top = maxParallel();
     f.parallel.max = top;
     parallelExplain.textContent = top === 1 ? "this model answers one request at a time" : `0 = fit to the cards · up to ${top}`;
@@ -1051,7 +1056,7 @@ function settingsForm(body, name, entry) {
     const gpus = status ? status.gpus : [];
     const current = rolesText();
     const options = gpus.map((g) => [`only-${g.index}`, `Only ${g.index}`, g.name]);
-    if (gpus.length > 1 && !oneCard) options.push(["split", native === "inkling" ? "Both cards together" : "Split over all cards"]);
+    if (gpus.length > 1 && !oneCard) options.push(["split", "Split over all cards"]);
     const onlyText = (i) => gpus.map((x) => `${x.index}=${x.index === i ? "main" : "off"}`).join(",");
     const chosenQuick = gpus.length > 1 && current === defaultRoles() ? "split"
       : (gpus.find((g) => current === onlyText(g.index)) ? `only-${gpus.find((g) => current === onlyText(g.index)).index}` : "");
@@ -1069,15 +1074,13 @@ function settingsForm(body, name, entry) {
           ? el("a", { class: "chip disabled", title: "This model runs on the main card only." }, r)
           : el("a", { class: "chip" + (r === role ? " on" : ""), role: "button", onclick: () => setRole(g.index, r) }, r))));
     }));
-    cardsNote.textContent = !native
-      ? "This model runs on one card only, the main one. The other cards stay off; as helpers they would take the main card's place, because its engine uses the first card it sees."
-      : native === "inkling"
-        ? "On this engine backend Inkling-2-Mini runs on one card only, the main one. Strata uses two cards together only with NVIDIA cards."
-        : "This model runs on one card only, the main one. Strata's setup uses no other card for it.";
+    cardsNote.textContent = "This model runs on one card only, the main one. The other cards stay off; as helpers they would take the main card's place, because its engine uses the first card it sees.";
     cardsNote.classList.toggle("hidden", !oneCard || gpus.length < 2);
-    // Temporary Strata workaround (known_problems.py): Inkling-2-Mini on two NVIDIA cards.
+    // Hy4-Flash and Inkling-2-Mini use only so many cards; Strata drops the last ones, and the main card is last.
     const inUse = gpus.filter((g) => (roles[g.index] || "off") !== "off").length;
-    inklingCardsWarn.classList.toggle("hidden", !(native === "inkling" && !oneCard && inUse >= 2));
+    const limit = nativeCardLimit(native, status && status.checks.backend);
+    cardLimitWarn.textContent = `Strata uses at most ${limit} cards for this model on this backend. Set the others to Off, or the main card may be left out.`;
+    cardLimitWarn.classList.toggle("hidden", inUse <= limit);
     updateReserveLabels();
     updateEstimates();
   }
@@ -1546,13 +1549,97 @@ async function refreshModels() {
 }
 
 // Bottom of the sidebar: the Strata base and this web UI (web/api.py, versions()). Fixed per image, so set once.
+// ---- versions and changelog
+
+const STRATA_REPO = "https://github.com/Niko1221/Strata";
+const external = (href, ...children) => el("a", { href, target: "_blank", rel: "noopener noreferrer" }, ...children);
+
 function renderVersions(v) {
   const box = $("versions");
   if (!v || box.childElementCount) return;
+  // Strata links to its repository, its version to that release's notes; the Supervisor version opens our changelog.
+  const strataVersion = /^[0-9]+(\.[0-9]+)*$/.test(v.strata)
+    ? external(`${STRATA_REPO}/releases/tag/v${v.strata}`, v.strata) : v.strata;
   box.replaceChildren(
-    el("span", {}, "Strata version"), el("span", { class: "mono" }, v.strata),
-    el("span", {}, "Supervisor version"), el("span", { class: "mono" }, v.supervisor));
-  if (v.flavor) box.title = `Strata image flavor: ${v.flavor}`;
+    el("span", {}, external(STRATA_REPO, "Strata"), " version"),
+    el("span", { class: "mono", title: v.flavor ? `Strata image flavor: ${v.flavor}` : null }, strataVersion),
+    el("span", {}, "Supervisor version"),
+    el("span", { class: "mono" }, el("a", { href: "#", title: "Show the changelog", onclick: (e) => { e.preventDefault(); showChangelog(false); } }, v.supervisor)));
+  showChangelog(true);
+}
+
+/** Inline Markdown of CHANGELOG.md: `code` and [text](https://…) links. Everything becomes DOM nodes, never raw HTML. */
+function mdInline(text) {
+  const out = [];
+  const re = /`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(m[1] !== undefined ? el("code", {}, m[1]) : external(m[3], m[2]));
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** A changelog section: paragraphs and "- " bullets; indented lines continue the bullet or paragraph before them. */
+function mdBlock(body) {
+  const blocks = [];
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    const last = blocks[blocks.length - 1];
+    if (!line) { if (last) last.closed = true; continue; }
+    const bullet = /^[-*] /.test(line);
+    if (bullet) blocks.push({ bullet: true, text: line.slice(2) });
+    else if (last && !last.closed && (last.bullet ? /^\s/.test(raw) : true)) last.text += " " + line;
+    else blocks.push({ bullet: false, text: line });
+  }
+  const nodes = [];
+  for (const b of blocks) {
+    if (!b.bullet) { nodes.push(el("p", {}, mdInline(b.text))); continue; }
+    if (!(nodes[nodes.length - 1] instanceof HTMLUListElement)) nodes.push(el("ul"));
+    nodes[nodes.length - 1].append(el("li", {}, mdInline(b.text)));
+  }
+  return nodes;
+}
+
+let changelogOpen = false;
+let popupChecked = false;
+
+/**
+ * The changelog in a dialog. `popup`: once after an update (web/changelog.py decides which sections are new); closing
+ * it tells the server, which remembers the version in /config. Otherwise every section, the current one first.
+ */
+async function showChangelog(popup) {
+  if (changelogOpen || (popup && popupChecked)) return;
+  if (popup) popupChecked = true;
+  let data;
+  try { data = await api("/api/changelog"); } catch (e) { if (!popup) alert(e.message); return; }
+  const fresh = new Set(data.unseen);
+  const entries = popup ? data.entries.filter((x) => fresh.has(x.version)) : data.entries;
+  if (popup && !entries.length) return;
+  const section = (x) => el("section", { class: "cl-entry" + (x.version === data.current ? " current" : "") },
+    el("h3", {}, `v${x.version}`, x.date ? el("span", { class: "muted" }, ` · ${x.date}`) : null,
+      x.version === data.current ? badge("installed", "acc") : null),
+    mdBlock(x.body));
+  const dialog = el("dialog", { class: "changelog" });
+  const close = () => dialog.close();
+  const full = el("button", { type: "button", onclick: () => { close(); showChangelog(false); } }, "Full changelog");
+  dialog.append(
+    el("div", { class: "cl-head" },
+      el("h2", {}, popup ? `What's new in Strata Supervisor ${data.current}` : "Changelog"),
+      el("button", { type: "button", class: "icon", title: "Close", onclick: close }, "✕")),
+    el("div", { class: "cl-body" }, entries.length ? entries.map(section) : el("p", { class: "muted" }, "The changelog is not available.")),
+    el("div", { class: "cl-foot" }, popup ? full : null, el("button", { type: "button", class: "primary", onclick: close }, popup ? "Got it" : "Close")));
+  dialog.addEventListener("close", () => {
+    changelogOpen = false;
+    dialog.remove();
+    if (popup) api("/api/changelog/seen", {}).catch((e) => console.error(e));
+  });
+  dialog.addEventListener("click", (e) => { if (e.target === dialog) close(); });  // a click beside the box
+  document.body.append(dialog);
+  changelogOpen = true;
+  dialog.showModal();
 }
 
 async function tick() {

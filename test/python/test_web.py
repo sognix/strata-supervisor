@@ -132,6 +132,24 @@ class WebTest(unittest.TestCase):
         self.assertIn(b"<svg", response.read())
         conn.close()
 
+    def test_changelog_route_and_seen(self) -> None:
+        root = Path(self._tmp.name)
+        (root / "CHANGELOG.md").write_text("# Changelog\n\n## [v1.0.5] - 2026-11-23\n\n- New.\n\n## [v1.0.4] - 2026-11-22\n\n- Old.\n")
+        self.app.changelog_path = root / "CHANGELOG.md"
+        self.app.config_dir = root / "config"
+        self.app.owner = Owner(os.getuid(), os.getgid())
+        os.environ["SUPERVISOR_VERSION"] = "1.0.5"
+        self.addCleanup(os.environ.pop, "SUPERVISOR_VERSION", None)
+        status, data = self.call("GET", "/api/changelog")
+        self.assertEqual(status, 200)
+        self.assertEqual((data["current"], data["unseen"]), ("1.0.5", ["1.0.5"]))
+        self.assertEqual([e["version"] for e in data["entries"]], ["1.0.5", "1.0.4"])
+        origin = {"Origin": f"http://127.0.0.1:{self.report.ui_port}"}
+        self.assertEqual(self.call("POST", "/api/changelog/seen", {}, origin), (200, {"seen": "1.0.5"}))
+        self.assertEqual((root / "config" / "last-seen-version").read_text(), "1.0.5\n")
+        self.assertEqual(self.call("GET", "/api/changelog")[1]["unseen"], [])
+        self.assertEqual(self.call("POST", "/api/changelog/seen", {}, {"Origin": "http://evil.example"})[0], 403)
+
     def test_changes_need_json_and_same_origin(self) -> None:
         good = {"model": "Q2_0"}
         self.assertEqual(self.call("POST", "/api/models/m1", b'{"model": "Q2_0"}', {"Content-Type": "text/plain"})[0], 415)

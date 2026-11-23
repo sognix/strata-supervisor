@@ -21,7 +21,7 @@ from .host.startup import Paths, Report, run_checks
 from .strata import model_config
 from .strata.launcher import Launcher
 from .strata.placeholder import Placeholder
-from .web import api, server
+from .web import api, changelog, server
 
 PYTHON_BIN = Path("/opt/strata/terminal/python/bin/python3")
 
@@ -83,7 +83,10 @@ def main(paths: Paths | None = None, python_bin: Path = PYTHON_BIN) -> int:
         engine_log_dir=paths.data / "state" / "strata" / "launch",
         strata_models_dir=paths.data / "Strata-data" / "models",
         allowed_hosts=server.parse_allowed_hosts(env.get("ALLOWED_HOSTS", "")),
+        config_dir=paths.config,
+        owner=owner,
     )
+    changelog.mark_fresh_install(paths.config, api.versions(env)["supervisor"], bool(app.store.names()), owner)
     try:
         http_server = server.make_server(app, report.ui_port)
     except OSError as exc:
