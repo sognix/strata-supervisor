@@ -27,7 +27,7 @@ RAM_MODES = ("normal", "resident-experts", "budget", "mmap-experts")
 # Families with an engine program and .strata files of their own (Strata 0.2.18 and later; runner.py and setup.py
 # name them the same way). Their engines take no KV format, RAM mode, VRAM reserve or draft layer, and refuse flags
 # they do not know (serve/hy4_kind.py), so to_flags() leaves those out. Pictures are on or off, and the drafter
-# built into the model file is switched off with `--drafting off`.
+# is switched off with `--drafting off` (without it Hy4-Flash drafts, Inkling-2-Mini measures first, Strata 0.2.21).
 NATIVE_FAMILIES = frozenset({"hy4-flash", "inkling-2-mini"})
 # Inkling-2-Mini serves 1 to 64 requests at once (strata_control/inkling_fit.py, MAX_PARALLEL); the others up to 8.
 MAX_PARALLEL = {"inkling-2-mini": 64}
@@ -204,7 +204,7 @@ def to_flags(cfg: ModelConfig) -> list[str]:
         flags += ["--kv", cfg.kv]
     flags += ["--vision", cfg.vision]  # always explicit, the defaults disagree (IMPLEMENTATION.md, 5.11)
     if native and cfg.mtp == "off":
-        flags += ["--drafting", "off"]  # the drafter in the model file (DFly2, DSpark); on is the engine's default
+        flags += ["--drafting", "off"]  # the drafter (DFly2, DSpark); else Strata's default (inkling_kind.wants_drafter)
     elif cfg.mtp and not native:
         flags += ["--mtp", cfg.mtp]
     if cfg.parallel:

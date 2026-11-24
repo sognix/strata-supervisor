@@ -32,7 +32,7 @@ class NativeFlagsTest(unittest.TestCase):
         self.assertEqual(flags, ["--model", "SQ-64", "--family", "hy4-flash", "--context", "128k", "--vision", "on",
                                  "--drafting", "off", "--gpu-roles", "0=main,1=off"])
 
-    def test_drafter_on_is_the_default(self) -> None:
+    def test_drafter_default_is_stratas(self) -> None:
         flags = mc.to_flags(cfg(model="SQ-20", family="inkling-2-mini", mtp=""))
         self.assertNotIn("--drafting", flags)
         self.assertNotIn("--mtp", flags)
@@ -108,20 +108,23 @@ class NativeFilesTest(unittest.TestCase):
 FAKE_CATALOG = """
 class _Strata:
     def own_families(self):
-        return {"qwen36": {"own_path": True}, "hy4-flash": {"own_path": True, "hy4": True}}
+        return {"qwen36": {"own_path": True}, "hy4-flash": {"own_path": True, "hy4": True},
+                "inkling-2-mini": {"own_path": True, "inkling": True}}
     def model_table(self, hw):
         return [
             {"family": "qwen", "title": "Qwen3.8-Flash-Next", "sizes": [{"model": "Q2_0", "download_gb": 70.0}]},
             {"family": "qwen36", "title": "Qwen3.6-35B-A3B", "sizes": [{"model": "UD-Q4_K_XL", "context_fit": {"fixed_gb": 2.0}}]},
             {"family": "hy4-flash", "title": "Tencent Hy4-Flash", "sizes": [{"model": "SQ-64", "download_gb": 130.5,
                 "hy4": {"placement": {"vram_gb": 15.0, "ram_gb": 40.0, "ssd_gb": 1.2}, "mode": "near_resident_ssd", "context": 131072}}]},
+            {"family": "inkling-2-mini", "title": "Inkling-2-Mini", "sizes": [{"model": "SQ-10"}, {"model": "UD-IQ1_S"}]},
         ]
 class Catalog:
     strata = _Strata()
     def hardware(self):
         return {}
     def tables(self):
-        return ({}, {"qwen": {"tag": ""}, "qwen36": {"tag": "qwen36-"}, "hy4-flash": {"tag": "hy4-flash-"}}, {}, None)
+        return ({}, {"qwen": {"tag": ""}, "qwen36": {"tag": "qwen36-"}, "hy4-flash": {"tag": "hy4-flash-"},
+                     "inkling-2-mini": {"tag": "inkling-2-mini-"}}, {}, None)
     def contexts(self):
         return [32768, 65536]
     def contexts_for(self, family, model=None):
@@ -135,6 +138,23 @@ def size_of(name):
     return FILES.get(name)
 """
 
+# strata_control/inkling_family.py of Strata 0.2.21: files_of() still names the DSpark GGUF, setup fetches mtp.safetensors
+FAKE_INKLING = """
+MTP_FILE = "mtp.safetensors"
+DSPARK_GGUF_FILE = "dspark-Inkling-2-Mini-Q8_0.gguf"
+FILES = {MTP_FILE: 636, DSPARK_GGUF_FILE: 402, "Inkling-2-Mini-UD-IQ1_S.gguf": 7764, "Inkling-2-Mini-SQ-10.strata": 10470,
+         "Inkling-2-Mini-Vision.strata": 637}
+def is_gguf_build(build):
+    return build.startswith("UD-")
+def files_of(build, vision=True, dspark=True):
+    out = ["Inkling-2-Mini-" + build + (".gguf" if is_gguf_build(build) else ".strata")]
+    if is_gguf_build(build) and dspark:
+        out.append(DSPARK_GGUF_FILE)
+    return out + (["Inkling-2-Mini-Vision.strata"] if vision else [])
+def size_of(name):
+    return FILES.get(name)
+"""
+
 
 class ProbeTest(unittest.TestCase):
     def test_native_rows(self) -> None:
@@ -142,13 +162,21 @@ class ProbeTest(unittest.TestCase):
             terminal = Path(tmp) / "terminal"
             for rel, text in (("strata_cli/__init__.py", ""), ("strata_cli/launch/__init__.py", ""),
                               ("strata_cli/launch/catalog.py", FAKE_CATALOG), ("strata_control/__init__.py", ""),
-                              ("strata_control/hy4_family.py", FAKE_HY4), ("bin/strata", "")):
+                              ("strata_control/hy4_family.py", FAKE_HY4), ("strata_control/inkling_family.py", FAKE_INKLING),
+                              ("bin/strata", "")):
                 (terminal / rel).parent.mkdir(parents=True, exist_ok=True)
                 (terminal / rel).write_text(textwrap.dedent(text))
             done = subprocess.run([sys.executable, "-I", "-c", catalog.CATALOG_PROBE, str(terminal / "bin" / "strata")],
                                   capture_output=True, text=True, timeout=60, check=False)
         self.assertEqual(done.returncode, 0, done.stderr)
-        rows = {r["family"]: r for r in json.loads(done.stdout)["rows"]}
+        all_rows = json.loads(done.stdout)["rows"]
+        rows = {r["family"]: r for r in all_rows}
+        ink = {r["model"]: r for r in all_rows if r["family"] == "inkling-2-mini"}
+        self.assertEqual([f["name"] for f in ink["UD-IQ1_S"]["files"]],
+                         ["Inkling-2-Mini-UD-IQ1_S.gguf", "mtp.safetensors", "Inkling-2-Mini-Vision.strata"])
+        self.assertEqual(ink["UD-IQ1_S"]["files"][1]["bytes"], 636)
+        self.assertEqual([f["name"] for f in ink["SQ-10"]["files"]],
+                         ["Inkling-2-Mini-SQ-10.strata", "Inkling-2-Mini-Vision.strata"])
         hy4 = rows["hy4-flash"]
         self.assertEqual(hy4["native"], "hy4")
         self.assertFalse(hy4["own_path"])                       # not the Qwen3.6 rules

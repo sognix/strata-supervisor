@@ -55,7 +55,12 @@ def native_files(kind, model):
     try:
         import importlib
         mod = importlib.import_module("strata_control." + kind + "_family")
-        return [{"name": n, "bytes": mod.size_of(n)} for n in mod.files_of(model, True)]
+        names = mod.files_of(model, True)
+        # Inkling-2-Mini's GGUF builds (Strata 0.2.21): setup fetches the original drafter mtp.safetensors, not the
+        # DSpark GGUF that files_of() still names (setup.py inkling_fetch_drafter)
+        if kind == "inkling" and mod.is_gguf_build(model):
+            names = [mod.MTP_FILE if n == mod.DSPARK_GGUF_FILE else n for n in names]
+        return [{"name": n, "bytes": mod.size_of(n)} for n in names]
     except Exception:
         return None
 # Every family of the table, as Catalog.rows() lists them since Strata 0.2.16 (#5869).

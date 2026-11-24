@@ -27,12 +27,15 @@ const OWN_PATH_STATE_GIB = 0.07e9 / GIB;
 const isOwnPath = (row) => Boolean(row && row.own_path);
 // Families with an engine program and model files of their own (Strata 0.2.18 and later): "hy4" (Tencent Hy4-Flash)
 // and "inkling" (Inkling-2-Mini). No KV format, RAM modes, VRAM reserve or draft layer; the drafter is built into the
-// .strata model file, or for Inkling-2-Mini's GGUF builds (Strata 0.2.20) a DSpark file downloaded with them.
+// .strata model file, or for Inkling-2-Mini's GGUF builds a file downloaded with them (mtp.safetensors, Strata 0.2.21).
+// Hy4-Flash drafts by default; Inkling-2-Mini measures at the first start of a setup whether DSpark is faster on this
+// card and keeps it only then (inkling_kind.wants_drafter, "auto"), and leaves it off on a CUDA layer split (#6741).
 // Hy4-Flash answers one request at a time, Inkling-2-Mini up to 64. Several cards (setup.py, install_hy4_flash and
 // install_inkling2, v0.2.20): Hy4-Flash up to 4 on every backend, Inkling-2-Mini up to 4 on CUDA and 2 elsewhere.
 // Strata keeps the first ones of helpers + main (main last), so more cards than that would cut the main card.
 const nativeKind = (row) => (row && row.native) || null;
 const NATIVE_PARALLEL = { hy4: 1, inkling: 64 };
+const NATIVE_DRAFTER_DEFAULT = { hy4: "on (built into the model file)", inkling: "Strata's choice (measured at the first start)" };
 const nativeGguf = (row) => Boolean(row && Array.isArray(row.files) && row.files.some((x) => /\.gguf$/i.test(x.name)));
 const nativeCardLimit = (kind, backend) => (kind === "hy4" ? 4 : kind === "inkling" ? (backend === "cuda" ? 4 : 2) : Infinity);
 const GB_PER_GIB = GIB / 1e9;
@@ -459,7 +462,7 @@ function overviewTab(body, name, entry) {
     ["Model", titleOf(cfg, name)], ["Version", cfg.model ? mono([cfg.family, cfg.model].filter(Boolean).join(" ")) : "—"],
     ["Own model files", cfg.model_path ? mono(cfg.model_path) : "—"], ["Context", mono(cfg.context)],
     ["KV format", own ? unused.cloneNode(true) : mono(cfg.kv)], ["Pictures", cfg.vision],
-    native ? ["Drafter", cfg.mtp === "off" ? "off" : nativeGguf(row) ? "on (DSpark file)" : "on (built into the model file)"] : ["Draft layer", cfg.mtp || "Strata's choice"],
+    native ? ["Drafter", cfg.mtp === "off" ? "off" : NATIVE_DRAFTER_DEFAULT[native]] : ["Draft layer", cfg.mtp || "Strata's choice"],
     ["Parallel requests", cfg.parallel || "fit to the cards"], ["Cards", roleText()],
     ["RAM mode", own ? unused.cloneNode(true) : ramModeLabel(cfg)],
     ["VRAM reserve", own ? unused.cloneNode(true) : reserveText(cfg)], ["Advanced", cfg.extra_set.length ? mono(cfg.extra_set.join(" ")) : "—"],
@@ -976,14 +979,16 @@ function settingsForm(body, name, entry) {
     for (const o of f.vision.options) if (o.value === "gpu" || o.value === "cpu") o.disabled = Boolean(kind);
     if (kind && (f.vision.value === "gpu" || f.vision.value === "cpu")) f.vision.value = "on";
     visionExplain.textContent = kind ? "on downloads the picture reader file with the model" : "";
-    // The drafter (DFly2 for Hy4-Flash, DSpark for Inkling-2-Mini): in the .strata model file, or a DSpark file that
-    // comes with Inkling-2-Mini's GGUF builds. On by default, or off.
+    // The drafter (DFly2 for Hy4-Flash, DSpark for Inkling-2-Mini): in the .strata model file, or a file that comes
+    // with Inkling-2-Mini's GGUF builds. Strata's default (on for Hy4-Flash, measured for Inkling-2-Mini), or off.
     mtpLabel.textContent = kind ? "Drafter" : "Draft layer (MTP)";
-    const mtpText = { "": kind ? (gguf ? "on (DSpark file)" : "on (built into the model file)") : "Strata's choice", on: "on", off: kind ? "off" : "off (saves about 1 GB VRAM, slower)" };
+    // Inkling: plain "Strata's choice" (the longer text does not fit the field); the note below says it is measured.
+    const mtpText = { "": kind === "hy4" ? NATIVE_DRAFTER_DEFAULT.hy4 : "Strata's choice", on: "on", off: kind ? "off" : "off (saves about 1 GB VRAM, slower)" };
     for (const o of f.mtp.options) { o.textContent = mtpText[o.value]; if (o.value === "on") o.hidden = o.disabled = Boolean(kind); }
     if (kind && f.mtp.value === "on") f.mtp.value = "";
     mtpExplain.textContent = !kind ? "" : kind === "hy4" ? "DFly2, built into the model file"
-      : gguf ? "DSpark, a small file Strata downloads with this build" : "DSpark, built into the model file";
+      : (gguf ? "DSpark, a file Strata downloads with this build" : "DSpark, built into the model file")
+        + " · on only when it is faster on this card (measured once, the first start takes a few minutes longer); off when the layers are split over several NVIDIA cards";
     const top = maxParallel();
     f.parallel.max = top;
     parallelExplain.textContent = top === 1 ? "this model answers one request at a time" : `0 = fit to the cards · up to ${top}`;
