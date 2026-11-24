@@ -5,7 +5,7 @@ picture reader's mmproj), its prepared data for a version in /data/Strata-data/p
 (strata_control/models_move.py: "models/<tag>", "packs/<tag>"). Deleting a Strata model removes both; the shared
 draft layer (mtp) stays. Families with an engine program of their own (Hy4-Flash, Inkling-2-Mini, Strata 0.2.18 and
 later) keep every build in one folder, models/<family>, and builds share files there (Hy4-Flash's Engram file, the
-picture reader, Inkling-2-Mini's DSpark drafter for its GGUF builds, Strata 0.2.20), so such a folder is listed file by
+picture reader, Inkling-2-Mini's drafter mtp.safetensors for its GGUF builds, Strata 0.2.21), so such a folder is listed file by
 file: one build can go while the others and the shared files stay.
 Own GGUF files are the folders in /models. Strata has no delete command, so this module deletes, but only an entry
 it listed itself, never a path from outside, and never while a model runs.

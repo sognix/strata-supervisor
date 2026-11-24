@@ -177,8 +177,11 @@ The form adapts when you pick one:
 - **No KV format, no RAM modes, no VRAM reserve.** The engine places the experts itself: on the card, in RAM, and
   what does not fit is read from the SSD while the model answers (much slower). The model page shows where Strata
   places them on your computer, and the fit marker says "SSD reads" when a lot comes from the SSD.
-- **Pictures** are on or off. **Drafter**: on by default; set it to off if you want. It is built into the `.strata`
-  model file; Inkling-2-Mini's GGUF builds get it as a small extra file (`dspark-Inkling-2-Mini-Q8_0.gguf`, 0.4 GB).
+- **Pictures** are on or off. **Drafter**: Strata's choice by default, or off. It is built into the `.strata` model
+  file; Inkling-2-Mini's GGUF builds get it as an extra file (`mtp.safetensors`, 0.64 GB). Hy4-Flash always uses it.
+  For Inkling-2-Mini Strata measures at the first start whether the drafter makes answers faster on your card and
+  keeps it only then; that first start takes a few minutes longer. When the model is split over several NVIDIA cards,
+  Inkling-2-Mini runs without the drafter.
 - **Cards:** both models can use several cards (Strata 0.2.20): Hy4-Flash up to 4, Inkling-2-Mini up to 4 NVIDIA
   cards or 2 AMD cards. Strata leaves out the cards beyond that, and the main card could be one of them, so the form
   warns when more cards are on.
@@ -190,7 +193,7 @@ The form adapts when you pick one:
   (`UD-IQ1_S` to `UD-Q8_K_XL`, about 8 to 23 GB) are the same model in GGUF form. Up to 64 parallel requests.
 - All builds of one model are in one folder (`/data/Strata-data/models/hy4-flash` or `.../inkling-2-mini`). The
   Models page lists its files one by one, so you can delete one build. Some files are shared by all builds:
-  Hy4-Flash's Engram file, the picture reader (`…-Vision.strata`) and Inkling-2-Mini's DSpark file. Delete them
+  Hy4-Flash's Engram file, the picture reader (`…-Vision.strata`) and Inkling-2-Mini's drafter (`mtp.safetensors`). Delete them
   only when you remove the last build that uses them.
 
 ## 7. Loading, unloading, switching
