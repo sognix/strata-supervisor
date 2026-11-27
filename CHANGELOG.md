@@ -3,6 +3,17 @@
 All notable changes to this project. Versions follow [Semantic Versioning](https://semver.org/);
 each release also names the Strata base image it was built on.
 
+## [v1.0.7] - 2026-11-27
+
+Built on Strata `0.2.22`.
+
+- The OpenAI- and Anthropic-compatible API is now available under /v1 on the web UI port, so you can use a single host port for both the interface and API calls; the separate API port remains optional for direct connections.
+- The KV format options in the model settings now adapt to the specific model family, offering relevant choices like fp16 and fp8 for Qwen3.6 or Inkling-2-Mini, and hiding the option entirely for Hy4-Flash.
+- A new "Strata's choice" option is available for GPU roles, allowing Strata to automatically select which cards to use and their roles when the model loads.
+- The memory estimates for the conversation cache are now calculated based on your available RAM, reflecting the larger cache sizes Strata can now utilize on systems with more memory.
+- The model overview page now displays the specific VRAM and RAM limits Strata applied during the last load, alongside its initial placement plan.
+- The hardware page now clearly labels the web UI port as serving both the interface and the API, and updates the port status display to reflect the new routing.
+
 ## [v1.0.6] - 2026-11-24
 
 Built on Strata `0.2.21`.

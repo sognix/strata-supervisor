@@ -10,6 +10,18 @@ import re
 from pathlib import Path
 
 RUN_START = re.compile(r"^\[strata\] (\S+ \S+) engine started")
+# Since Strata v0.2.22 (#7044) Control passes the conversation cache itself on a PC (or container limit) with a lot of
+# RAM: "--conversation-cache-mib N" in the arguments of the "engine started" line, and the engine then writes no
+# "sized from the free RAM" line. A value set by hand ends up there too; 0 means the cache is off.
+CONVERSATION_FLAG = re.compile(r"\s--conversation-cache-mib (\d+)(?:\s|$)")
+# Hy4-Flash and Inkling-2-Mini: the expert limits Strata's setup worked out for this computer, also in the arguments of
+# that line (setup.py install_hy4_flash / inkling_expert_flags, Strata 0.2.22). strata-inkling reads both as GiB (#6792);
+# --ssd-experts: what fits in neither is read from the SSD. Left out on a layer split or unified memory.
+NATIVE_FLAGS = {
+    "native_vram_cap_gib": re.compile(r"\s--vram-experts-gb ([\d.]+)(?:\s|$)"),
+    "native_ram_cap_gib": re.compile(r"\s--ram-experts-gb ([\d.]+)(?:\s|$)"),
+}
+SSD_FLAG = re.compile(r"\s--ssd-experts(?:\s|$)")
 PATTERNS = {
     # "--batch: 3 slot sessions on CUDA0 (0.56 GiB each); 17.97 GiB free"
     "sessions": re.compile(r"--batch: (\d+) slot sessions on \S+ \(([\d.]+) GiB each\)"),
@@ -63,6 +75,15 @@ def parse(lines: list[str]) -> dict:
         m = RUN_START.match(line)
         if m:
             out["started"] = m.group(1)
+            flag = CONVERSATION_FLAG.search(line)
+            if flag:
+                out["conversation_gib"] = round(int(flag.group(1)) * GIB_PER_MIB, 2)
+            for key, pattern in NATIVE_FLAGS.items():
+                found = pattern.search(line)
+                if found:
+                    out[key] = float(found.group(1))
+            if SSD_FLAG.search(line):
+                out["native_ssd"] = True
             continue
         for key, pattern in PATTERNS.items():
             m = pattern.search(line)

@@ -88,13 +88,17 @@ def main(paths: Paths | None = None, python_bin: Path = PYTHON_BIN) -> int:
     )
     changelog.mark_fresh_install(paths.config, api.versions(env)["supervisor"], bool(app.store.names()), owner)
     try:
-        http_server = server.make_server(app, report.ui_port)
+        http_server = server.make_server(app, report.ui_port, api_port=report.port)
     except OSError as exc:
         log("[X]", f"The web UI cannot listen on port {report.ui_port} ({exc}). Set UI_PORT to a free port.")
         placeholder.release()
         return 1
     threading.Thread(target=http_server.serve_forever, kwargs={"poll_interval": 0.5}, daemon=True).start()
-    log("[i]", f"Web UI on port {report.ui_port}, API placeholder on port {report.port}. No model is loaded.")
+    # Container ports: which host ports Docker maps to them is not visible from inside (USER-GUIDE, "One port or two").
+    log("[i]", f"Port {report.ui_port}: web UI, and the API under /v1, passed on to Strata on port {report.port} "
+               "(one host port is enough).")
+    log("[i]", f"Port {report.port}: Strata's own API. Clients reach it directly only if a host port is mapped to it "
+               "(two ports). No model is loaded, so the placeholder answers there with 503.")
 
     # The handler only sets a flag. No signal mask, because child processes would inherit it and
     # `strata launch` must see SIGINT (IMPLEMENTATION.md, 5.4). Short sleeps: after SIGTERM the 8 s stop

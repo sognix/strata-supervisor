@@ -1,21 +1,25 @@
-"""The web UI: a small JSON API plus one static page on UI_PORT.
+"""The web UI: a small JSON API plus one static page on UI_PORT, and Strata's API under /v1 (web/proxy.py).
 
 No login for now, LAN use only (IMPLEMENTATION.md, section 5, point 8). Protection against other web
 pages in the browser instead: every change is a POST with a JSON body, and a browser's Origin must
 match the Host. ALLOWED_HOSTS (comma separated) optionally limits the Host header against DNS
 rebinding. Model control and the HTTP layer are kept apart, so a login can be added later.
+Requests under /v1 skip these checks: they go on to Strata unchanged, and Strata checks them as it checks a
+direct call (API key, Host, Origin), so a client that works on the API port works here as well.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from ..strata import model_config as mc
 from ..strata.launcher import LaunchError, check_model_name
+from . import proxy
 from .api import AppState
 
 
@@ -33,6 +37,7 @@ class _Handler(BaseHTTPRequestHandler):
     server_version = "strata-supervisor"
     protocol_version = "HTTP/1.1"
     app: AppState  # set on the subclass made by make_server
+    api_port: int | None = None  # Strata's port inside the container (PORT); None: no /v1 on this port
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         pass
@@ -107,7 +112,16 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ---- routes
 
+    def _api(self) -> bool:
+        """Pass a /v1 request on to Strata. True when it was one."""
+        if self.api_port is None or not proxy.is_api_path(urlsplit(self.path).path):
+            return False
+        proxy.forward(self, self.api_port)
+        return True
+
     def do_GET(self) -> None:  # noqa: N802
+        if self._api():
+            return
         path = urlsplit(self.path).path
         if path == "/api/health":  # the container health check calls 127.0.0.1, whatever ALLOWED_HOSTS says
             self._send_json(200, {"ok": True})
@@ -155,7 +169,17 @@ class _Handler(BaseHTTPRequestHandler):
 
     do_HEAD = do_GET
 
+    def do_OTHER(self) -> None:  # noqa: N802 - PUT, DELETE, PATCH, OPTIONS: only Strata's API takes them
+        if self._api():
+            return
+        self.close_connection = True  # the body, if any, is not read
+        self._error(405, "Method not allowed.")
+
+    do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_OTHER
+
     def do_POST(self) -> None:  # noqa: N802
+        if self._api():
+            return
         if not self._host_allowed():
             self._error(403, "This host name is not allowed (ALLOWED_HOSTS).")
             return
@@ -208,9 +232,16 @@ class _Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
+    def handle_error(self, request, client_address) -> None:
+        """A client that closes its connection (often mid-stream under /v1) is normal, not a traceback."""
+        if isinstance(sys.exc_info()[1], ConnectionError):
+            return
+        super().handle_error(request, client_address)
 
-def make_server(app: AppState, port: int, host: str = "") -> ThreadingHTTPServer:
-    handler = type("Handler", (_Handler,), {"app": app})
+
+def make_server(app: AppState, port: int, host: str = "", api_port: int | None = None) -> ThreadingHTTPServer:
+    """`api_port`: Strata's port, for the API under /v1 on this port; None leaves /v1 out (404)."""
+    handler = type("Handler", (_Handler,), {"app": app, "api_port": api_port})
     return _Server((host, port), handler)
 
 
