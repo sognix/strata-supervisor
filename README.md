@@ -12,6 +12,8 @@ load or unload them by hand in the browser.
 *Unofficial private project, not affiliated with, endorsed by, or supported by Niko1221 or the Strata
 project.*
 
+![Model configs: one model loaded, another one ready to load](docs/images/model-configs.png)
+
 ## Features
 
 - **Several model configs**, one TOML file each, editable in the UI or on the host. Several configs
@@ -29,8 +31,32 @@ project.*
 - **Models page**: Strata's downloads and your own GGUF folders with size and the configs using
   them; delete with confirmation.
 - **Logs** of the launch, the engine and the supervisor, with the API key hidden.
-- While no model runs, the API port answers `503` with "No model loaded in Strata." and
+- **One port** for the web UI and the API: the UI passes everything under `/v1` on to Strata. A separate
+  API port (container port `8080`) is optional; apps that use it talk to Strata directly.
+- While no model runs, the API answers `503` with "No model loaded in Strata." and
   `GET /v1/models` lists nothing.
+- **Light and dark mode**: the UI follows the system setting; **Theme** at the bottom of the sidebar
+  switches it, and the browser remembers the choice.
+
+## Screenshots
+
+A model config with what Strata reports about it:
+
+![Model page with settings and memory figures](docs/images/model-page.png)
+
+The settings form: one role per graphics card and the RAM mode, with an estimate for each mode:
+
+![Settings form with card roles and RAM modes](docs/images/settings-cards-ram.png)
+
+The downloaded model files, and the start checks, cards and memory of the container:
+
+![Models page with Strata's model files](docs/images/models-page.png)
+
+![Hardware page with start checks, graphics card and memory](docs/images/hardware-page.png)
+
+The same model page in dark mode:
+
+![Model page in dark mode](docs/images/model-page-dark.png)
 
 ## Requirements
 
@@ -55,7 +81,7 @@ Install **strata-supervisor** from Community Applications, or add
 
 ```sh
 docker run -d --name strata-supervisor --gpus all \
-  -p 8081:8081 -p 8080:8080 \
+  -p 8081:8081 \
   --ulimit memlock=-1:-1 --shm-size 2g \
   -e ALLOWED_HOSTS=192.168.1.10,myserver \
   -v /srv/strata/data:/data \
@@ -68,7 +94,7 @@ AMD (here an RX 7000):
 ```sh
 docker run -d --name strata-supervisor \
   --device /dev/kfd --device /dev/dri --group-add video \
-  -p 8081:8081 -p 8080:8080 \
+  -p 8081:8081 \
   --ulimit memlock=-1:-1 --shm-size 2g \
   -e ALLOWED_HOSTS=192.168.1.10,myserver \
   -v /srv/strata/data:/data \
@@ -76,7 +102,9 @@ docker run -d --name strata-supervisor \
   ghcr.io/sognix/strata-supervisor:latest-rocm-gfx110x
 ```
 
-Open `http://<server>:8081`. Nothing is loaded at start.
+Open `http://<server>:8081`. Nothing is loaded at start. Apps use `http://<server>:8081/v1` as the API.
+For a separate API port, add `-p 8080:8080` and use `http://<server>:8080/v1`
+([user guide](docs/USER-GUIDE.md#one-port-or-two)).
 
 ### Image tags
 
@@ -97,10 +125,10 @@ and `dev-<flavor>` follow the main branch and are for testing.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `UI_PORT` | `8081` | Web UI port inside the container (change only with host networking) |
-| `PORT` | `8080` | API port inside the container |
+| `UI_PORT` | `8081` | Web UI port inside the container, also the API under `/v1` (change only with host networking) |
+| `PORT` | `8080` | Strata's own API port inside the container; map it only for a separate API port |
 | `API_KEY` / `API_KEY_FILE` | empty | Inference key, 16 characters or more. Empty: one is made once and kept in `/data/state/api-key` |
-| `ALLOWED_HOSTS` | empty | Host names or IPs the UI answers to, comma separated. Recommended, see [Security](#security) |
+| `ALLOWED_HOSTS` | empty | Host names or IPs the UI answers to, comma separated (not for `/v1`, which Strata checks). Recommended, see [Security](#security) |
 | `PUID` / `PGID` | `99` / `100` | Owner of the files written to `/config` |
 
 | Path | Content |
@@ -140,7 +168,9 @@ Set `ALLOWED_HOSTS` to the names you open the UI with: the UI then refuses other
 stops web pages on other sites from reaching it through DNS rebinding. Changes are accepted only as
 JSON `POST` requests whose `Origin` matches the host.
 
-The inference API on port 8080 is Strata's own and needs the API key.
+The inference API is Strata's own and needs the API key, on the web UI port under `/v1` and on a separate
+API port alike. Requests under `/v1` go on to Strata unchanged and skip the UI's own checks above; Strata
+checks them itself, as it does on its own port.
 
 To report a vulnerability, see [`SECURITY.md`](SECURITY.md).
 

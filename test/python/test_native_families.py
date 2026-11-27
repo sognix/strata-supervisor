@@ -32,6 +32,22 @@ class NativeFlagsTest(unittest.TestCase):
         self.assertEqual(flags, ["--model", "SQ-64", "--family", "hy4-flash", "--context", "128k", "--vision", "on",
                                  "--drafting", "off", "--gpu-roles", "0=main,1=off"])
 
+    def test_kv_formats_of_their_own(self) -> None:
+        # Inkling-2-Mini and Qwen3.6 take their own --kv values (Strata 0.2.21); "" and an old Flash-Next value mean
+        # Strata's default and pass nothing.
+        ink = lambda kv: mc.to_flags(cfg(model="SQ-20", family="inkling-2-mini", kv=kv))  # noqa: E731
+        for kv in ("fp16", "fp8", "k8v8", "k8v4"):
+            self.assertEqual(ink(kv)[ink(kv).index("--kv") + 1], kv)
+        for kv in ("", "int8"):
+            self.assertNotIn("--kv", ink(kv))
+        q36 = lambda kv: mc.to_flags(cfg(model="UD-Q4_K_XL", family="qwen36", kv=kv))  # noqa: E731
+        self.assertIn("fp8", q36("fp8"))
+        self.assertNotIn("--kv", q36(""))
+        self.assertNotIn("--kv", q36("int8"))
+        for family, kv in (("qwen36", "k8v4x"), ("qwen36", "fp4"), ("qwen", "fp8"), ("qwen", "")):
+            with self.assertRaises(mc.ConfigError, msg=(family, kv)):
+                cfg(model="Q2_0", family=family, kv=kv)
+
     def test_drafter_default_is_stratas(self) -> None:
         flags = mc.to_flags(cfg(model="SQ-20", family="inkling-2-mini", mtp=""))
         self.assertNotIn("--drafting", flags)

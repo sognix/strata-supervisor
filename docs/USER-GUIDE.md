@@ -5,8 +5,10 @@ options and building are in the [README](../README.md).
 
 ## 1. The idea in short
 
-- The container starts **without a model**. It runs only the web UI (port 8081) and a small placeholder on the
-  API port (8080) that answers `503 No model loaded in Strata.`
+- The container starts **without a model**. It runs only the web UI (port 8081) and a small placeholder on
+  Strata's own port (8080 inside the container) that answers `503 No model loaded in Strata.` The API of a
+  loaded model is reachable on the web UI port under `/v1`, or on a port of its own if you add one
+  (section 8, "One port or two").
 - You keep **several model configs** side by side, one file each. Only **one model is loaded at a time**, and
   only when you press Load. Nothing loads or swaps by itself.
 - A model's files are **downloaded on its first load**. After that they stay in `/data` and later loads take
@@ -54,8 +56,9 @@ change the tag at the end of **Repository**, and set Extra Parameters to match.
 5. Leave **Extra Parameters** as the image choice set them:
    - NVIDIA: `--gpus all --ulimit memlock=-1:-1 --shm-size 2g`
    - AMD: `--device /dev/kfd --device /dev/dri --group-add video --ulimit memlock=-1:-1 --shm-size 2g`
-6. If another container already uses port 8080 (for example another LLM server), change the host port of
-   **API port**, or stop the other container.
+6. The template maps one port, **Web UI port** (8081): the web UI and the API both use it. If another
+   container already uses 8081, change its host port. A separate API port is optional, see section 8, "One
+   port or two". Installs from before v1.0.7 keep their **API port** entry; it still works.
 
 Other Docker hosts: see the `docker run` example in the README.
 
@@ -133,7 +136,7 @@ this web UI yet.
 | Pictures (vision) | `off` saves memory. `on` lets the model read pictures. `gpu` or `cpu` decides where the picture reader runs. |
 | Draft layer (MTP) | Makes answers faster. `off` saves about 1 GB VRAM. |
 | Parallel requests | How many requests are answered at the same time. `0` lets Strata fit it to the cards. |
-| Cards | A role per card: **main**, **helper** or **off**; exactly one card is main. "Only 0" uses only card 0, "Split over all cards" uses all. Splitting adds the second card's VRAM, so more experts fit on the cards. A slow second card can also slow things down, so compare. |
+| Cards | **Strata's choice** (Strata picks the cards when the model loads), or a role per card: **main**, **helper** or **off**, with exactly one card main. "Only 0" uses only card 0, "Split over all cards" uses all. Picking a role on a card leaves Strata's choice; the estimates assume the card with the most VRAM as main. Splitting adds the second card's VRAM, so more experts fit on the cards. A slow second card can also slow things down, so compare. |
 | VRAM reserve | VRAM left free for other programs. "First card" is the first card **in Strata's order** (helpers first, main last); the labels name the card. Empty means Strata's default. |
 | RAM mode | How Strata keeps the experts in RAM, see below. |
 | Advanced | Extra engine settings, one `KEY=VALUE` per line, passed as `--set`. Settings the form sets itself (port, cards, RAM mode, VRAM reserve, ...) are refused here. |
@@ -159,8 +162,11 @@ the limit into account.
 Strata runs Qwen3.6-35B-A3B (versions `UD-Q4_K_XL`, `UD-Q6_K_XL`, `Q8_0`) on an engine of its own. Some settings
 work differently for it, and the form adapts when you pick it:
 
-- **One card only**, the main one. The other cards are set to **off**; helper is not offered.
-- **No KV format, no RAM modes, no VRAM reserve.** The engine keeps every expert it can on the main card. When
+- **One card only**, the main one. The other cards are set to **off**; helper is not offered. Strata can use a
+  second NVIDIA card as extra room for experts, but in Strata 0.2.22 the card roles come out the wrong way round
+  (the helper card computes, the main card only stores experts), so the UI leaves this out until Strata fixes it.
+- **KV format** of its own: `fp32` (Strata's default), `fp16` (half the context cache) or `fp8` (a quarter).
+- **No RAM modes, no VRAM reserve.** The engine keeps every expert it can on the main card. When
   not all fit, it keeps a copy of every expert in RAM (page-locked, so swap does not help). The fit marker
   says "too big" when that copy does not fit the container's RAM.
 - **To leave VRAM free** for other programs, put `expert-vram=12` (GiB for the experts on the card) under
@@ -174,7 +180,9 @@ Strata runs these two models on engine programs of their own, with their own mod
 also comes as GGUF builds since Strata 0.2.20).
 The form adapts when you pick one:
 
-- **No KV format, no RAM modes, no VRAM reserve.** The engine places the experts itself: on the card, in RAM, and
+- **KV format:** Hy4-Flash has none. Inkling-2-Mini: Strata's default, `fp16` or `fp8`; on NVIDIA also `k8v8` and
+  `k8v4`.
+- **No RAM modes, no VRAM reserve.** The engine places the experts itself: on the card, in RAM, and
   what does not fit is read from the SSD while the model answers (much slower). The model page shows where Strata
   places them on your computer, and the fit marker says "SSD reads" when a lot comes from the SSD.
 - **Pictures** are on or off. **Drafter**: Strata's choice by default, or off. It is built into the `.strata` model
@@ -210,11 +218,45 @@ The form adapts when you pick one:
 
 ## 8. Using the model from other programs
 
-- OpenAI-compatible apps: base URL `http://<server>:8080/v1`, API key from the "API key" button. The model
+- OpenAI-compatible apps: base URL `http://<server>:8081/v1`, API key from the "API key" button. The model
   name comes from `GET /v1/models`.
-- Anthropic-compatible apps (for example Claude Code): base URL `http://<server>:8080`, same key.
+- Anthropic-compatible apps (for example Claude Code): base URL `http://<server>:8081`, same key.
+- With a separate API port (below), use that port instead of 8081, for example `http://<server>:8080/v1`.
 - While no model is loaded, every request gets `503` with "No model loaded in Strata.", and `GET /v1/models`
-  lists no models. While a model loads, the port may not answer at all for a moment.
+  lists no models. While a model starts, requests may get a `503` for a moment.
+- Only paths under `/v1` reach Strata on the web UI port. Strata's own web page and its other routes (for
+  example `/status`) are only on a separate API port.
+
+### One port or two
+
+**One port** (the default for new installs): only the web UI port is mapped. API requests go to the web UI,
+which passes everything under `/v1` on to Strata inside the container, unchanged and piece by piece, so
+streamed answers arrive at once.
+
+```
+Browser ──► :8081 ──► web UI
+App     ──► :8081/v1 ──► web UI ──► Strata (port 8080, inside the container)
+```
+
+**Two ports:** you also map Strata's own port. Apps that use it talk to Strata directly; the web UI is not in
+between.
+
+```
+Browser ──► :8081 ──► web UI
+App     ──► :8080/v1 ──► Strata
+```
+
+To add the second port on Unraid: edit the container, **Add another Path, Port, Variable, Label or Device**,
+Config Type **Port**, Container Port **8080**, Host Port of your choice, Connection Type **TCP**. Installs from
+before v1.0.7 already have it as **API port**. To go back to one port, remove that entry and change your apps
+to the web UI port.
+
+Good to know:
+
+- With two ports, the API stays reachable on the web UI port as well (`:8081/v1`). Either way the API key
+  protects it.
+- Strata checks requests under `/v1` itself (the API key, its own host-name check), the same way for both
+  ports. **Allowed host names** applies to the web UI's own pages and actions, not to `/v1`.
 
 ## 9. Logs
 
@@ -267,7 +309,8 @@ Timeout"). The UI stops the model within 8 seconds; in tests it took about 4 sec
 | "nvidia-smi is not in the container" | Add `--gpus all` (Extra Parameters) and install the Nvidia-Driver plugin. |
 | "This is an AMD card, but /dev/kfd is not in the container" | Add `--device /dev/kfd --device /dev/dri --group-add video` to Extra Parameters. |
 | "The engine in this image cannot run on this computer" | The image does not match the card or driver; see "Pick your image" in section 2. |
-| "Port 8080 is busy" | Another container uses the API port. Stop it or map another host port. |
+| "Port 8080 is busy" | Something else in the container's network uses Strata's port (only possible with host networking). Set `PORT` to a free port. |
+| The container runs, but has no ports and the web UI is not reachable | Docker could not map a host port because another container uses it. Change the host port, or with two ports consider going back to one (section 8). |
 | Load stays at "Checking that the model files are complete" | Normal for a few minutes after a download. |
 | Unload did not finish | The banner names the state. Press Unload again. If it stays, restart the container. |
 | A model answers slowly | Compare "Only 0" with the split, and a RAM mode without SSD reads. The Overview shows how many experts are on the cards. |

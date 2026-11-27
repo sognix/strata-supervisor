@@ -46,6 +46,23 @@ class EngineReportTest(unittest.TestCase):
         lines = ["strata generate: expert cache 100 slots, 10.00 GiB of VRAM", "strata generate: expert cache 50 slots, 5.50 GiB of VRAM"]
         self.assertEqual(engine_report.parse(lines)["vram_experts_gib"], 15.5)
 
+    def test_conversation_cache_passed_by_control(self) -> None:
+        # Strata v0.2.22 (#7044): on a PC with a lot of RAM Control passes the cache in the engine's arguments, and the
+        # engine writes no "sized from the free RAM" line. The arguments are shortened.
+        started = "[strata] 2026-11-27 10:00:00 engine started: /opt/strata/components/engine/strata --serve --batch 3"
+        report = engine_report.parse([started + " --conversation-cache-mib 16384 --prompt-cache 1"])
+        self.assertEqual(report, {"started": "2026-11-27 10:00:00", "conversation_gib": 16.0})
+        self.assertEqual(engine_report.parse([started + " --conversation-cache-mib 0"])["conversation_gib"], 0.0)
+        self.assertNotIn("conversation_gib", engine_report.parse([started + " --conversation-cache-min-tokens 1024"]))
+
+    def test_native_expert_limits(self) -> None:
+        # The line as strata-inkling started on the 7900 XTX (Strata 0.2.22), shortened.
+        line = ("[strata] 2026-11-27 13:48:22 engine started: /opt/strata/components/shapes/inkling2/engine/strata-inkling --serve "
+                "--native /data/m.gguf --max-context 32768 --vram-experts-gb 12.00 --parallel 3 --draft off")
+        self.assertEqual(engine_report.parse([line]), {"started": "2026-11-27 13:48:22", "native_vram_cap_gib": 12.0})
+        both = engine_report.parse([line + " --ram-experts-gb 3.25 --ssd-experts"])
+        self.assertEqual((both["native_ram_cap_gib"], both["native_ssd"]), (3.25, True))
+
     def test_qwen36_lines(self) -> None:
         # Worded as engine/src/qwen35/q36_engine.cu prints them (Strata v0.2.17); the numbers are made up.
         hybrid = ["strata-q36: 2 sessions (--batch): 1.51 GiB of VRAM each at a context of 32768 (3.02 GiB in all), 12.00 GiB free before them",

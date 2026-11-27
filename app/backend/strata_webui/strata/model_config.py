@@ -19,6 +19,17 @@ from .launcher import LaunchError, check_model_name
 from ..core.ownership import Owner, set_file_owner
 
 KV_FORMATS = ("int8", "k8v4", "q4_0", "fp16")
+# Families with KV formats of their own (Strata 0.2.21 and later). "" in the file means Strata's default (no --kv).
+# Inkling-2-Mini: strata_cli/launch/settings.py inkling_kv_modes (fp16 and fp8 everywhere, k8v8 and k8v4 on CUDA; on HIP,
+# Metal and SYCL Strata turns those two into fp8 and says so). Qwen3.6-35B-A3B: its engine takes fp32 (the default), fp16,
+# fp8 and fp4, but `strata launch --kv` accepts only fp16 and fp8 of them (settings.py KV_MODES; runner.py passes those on
+# for arch qwen35moe). Hy4-Flash: none. A Flash-Next value left in such a file (int8, the old default) also means Strata's
+# default: it is accepted and not passed on.
+OWN_KV_FORMATS = {
+    "inkling-2-mini": ("fp16", "fp8", "k8v8", "k8v4"),
+    "qwen36": ("fp16", "fp8"),
+    "hy4-flash": (),
+}
 VISION_MODES = ("off", "on", "gpu", "cpu")
 MTP_MODES = ("", "on", "off")
 ROLES = ("main", "helper", "off")
@@ -115,7 +126,8 @@ def _validate(cfg: ModelConfig, roots: tuple[Path, ...]) -> None:
         cfg.model_path = str(_inside_roots(cfg.model_path, roots))
     if not CONTEXT.fullmatch(cfg.context):
         raise ConfigError(f"{cfg.context!r} is not a context size: e.g. 32k, 128k, 1m or a number of tokens.")
-    _one_of("kv", cfg.kv, KV_FORMATS)
+    own_kv = OWN_KV_FORMATS.get(cfg.family)
+    _one_of("kv", cfg.kv, KV_FORMATS if own_kv is None else ("",) + own_kv + KV_FORMATS)
     _one_of("vision", cfg.vision, VISION_MODES)
     _one_of("mtp", cfg.mtp, MTP_MODES)
     _one_of("ram_mode", cfg.ram_mode, RAM_MODES)
@@ -200,8 +212,11 @@ def to_flags(cfg: ModelConfig) -> list[str]:
         flags += ["--model-path", cfg.model_path]
     native = cfg.family in NATIVE_FAMILIES
     flags += ["--context", cfg.context]
-    if not native:
+    own_kv = OWN_KV_FORMATS.get(cfg.family)
+    if own_kv is None:
         flags += ["--kv", cfg.kv]
+    elif cfg.kv in own_kv:
+        flags += ["--kv", cfg.kv]  # else Strata's default for this family
     flags += ["--vision", cfg.vision]  # always explicit, the defaults disagree (IMPLEMENTATION.md, 5.11)
     if native and cfg.mtp == "off":
         flags += ["--drafting", "off"]  # the drafter (DFly2, DSpark); else Strata's default (inkling_kind.wants_drafter)
